@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Статистика приложений</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            overflow: auto;
+            padding: 0 20px;
+        }
+
+        h1,
+        h2 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 40px;
+        }
+
+        table,
+        th,
+        td {
+            border: 1px solid #ddd;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #0275d8;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+
+        .failure {
+            color: red;
+            font-weight: bold;
+        }
+
+        .notes-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h3 {
+            margin-top: 0;
+            color: #0275d8;
+        }
+
+        .card ul {
+            padding-left: 20px;
+            list-style: disc;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Статистика тестирования приложений</h1>
+
+        <!-- Представление 1: Сводная таблица успехов -->
+        <h2>Сводная таблица успехов</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Приложение</th>
+                    <th>Процент успеха</th>
+                    <th>Всего успешных попыток</th>
+                    <th>Всего попыток</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>аудиоплеер</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>4</td>
+                </tr>
+                <tr>
+                    <td>генератор QR-кодов</td>
+                    <td>67%</td>
+                    <td>2</td>
+                    <td>4</td>
+                </tr>
+                <tr>
+                    <td>записная книжка</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td>игра Змейка</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td>игра Сапер</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td>калькулятор</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td>приложение для просмотра изображений</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>4</td>
+                </tr>
+                <tr>
+                    <td>приложение показа погоды</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td>простой браузер</td>
+                    <td>33%</td>
+                    <td>1</td>
+                    <td>11</td>
+                </tr>
+                <tr>
+                    <td>простой редактор изображений</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td>секундомер</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td>список дел</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td>таймер</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td>текстовый редактор</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>4</td>
+                </tr>
+                <tr>
+                    <td>тетрис</td>
+                    <td>67%</td>
+                    <td>2</td>
+                    <td>4</td>
+                </tr>
+                <tr>
+                    <td>файловый менеджер</td>
+                    <td>100%</td>
+                    <td>3</td>
+                    <td>4</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Представление 2: Детальная таблица по попыткам -->
+        <h2>Детальная таблица по попыткам</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Приложение</th>
+                    <th>Попытка 1: Успех</th>
+                    <th>Попытка 1: Заметки</th>
+                    <th>Попытка 2: Успех</th>
+                    <th>Попытка 2: Заметки</th>
+                    <th>Попытка 3: Успех</th>
+                    <th>Попытка 3: Заметки</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>аудиоплеер</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>генератор QR-кодов</td>
+                    <td class="failure">Нет</td>
+                    <td>Приложение выдало Выполните в терминале: pip install qrcode pillow После установки ошибку пишет
+                        также.</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>записная книжка</td>
+                    <td class="success">Да</td>
+                    <td>Получился просто блокнот (текстовый редактор)</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td>просто блокнот</td>
+                </tr>
+                <tr>
+                    <td>игра Змейка</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td>вкусняшки спавнятся не на путях движения змейки, а между ними, не очевидно по какому пути
+                        ползти, чтобы съесть</td>
+                </tr>
+                <tr>
+                    <td>игра Сапер</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>калькулятор</td>
+                    <td class="success">Да</td>
+                    <td>странные кнопки</td>
+                    <td class="success">Да</td>
+                    <td>большие числа не вмещаются в экран. Плавающую точку не видно</td>
+                    <td class="success">Да</td>
+                    <td>косяк со шрифтами (светлое на светлом)</td>
+                </tr>
+                <tr>
+                    <td>приложение для просмотра изображений</td>
+                    <td class="success">Да</td>
+                    <td>нет зума и автомасштабирования</td>
+                    <td class="success">Да</td>
+                    <td>нельзя листать внутри папки</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>приложение показа погоды</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td>косяк со шрифтами (светлое на светлом)</td>
+                    <td class="success">Да</td>
+                    <td>косяк со шрифтами (светлое на светлом)</td>
+                </tr>
+                <tr>
+                    <td>простой браузер</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="failure">Нет</td>
+                    <td>не удалось исправить ошибки</td>
+                    <td class="failure">Нет</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>простой редактор изображений</td>
+                    <td class="success">Да</td>
+                    <td>можно только поворачивать и менять цветовую гамму Blur непонятно что делает</td>
+                    <td class="success">Да</td>
+                    <td>только поворот и чб -фильтр Blur непонятно что делает</td>
+                    <td class="success">Да</td>
+                    <td>только поворот и чб -фильтр</td>
+                </tr>
+                <tr>
+                    <td>секундомер</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td>нет кругов</td>
+                    <td class="success">Да</td>
+                    <td>нет кругов</td>
+                </tr>
+                <tr>
+                    <td>список дел</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td>косяк со шрифтами (светлое на светлом)</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>таймер</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>текстовый редактор</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>тетрис</td>
+                    <td class="failure">Нет</td>
+                    <td>нарушено обновление экрана. Фигуры телепортируются вниз.</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>файловый менеджер</td>
+                    <td class="success">Да</td>
+                    <td></td>
+                    <td class="success">Да</td>
+                    <td>нельзя вставлять и копировать</td>
+                    <td class="success">Да</td>
+                    <td>нельзя вставлять и копировать</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Представление 3: Карточки с заметками -->
+        <h2>Заметки по приложениям</h2>
+        <div class="notes-cards">
+            <div class="card">
+                <h3>генератор QR-кодов</h3>
+                <ul>
+                    <li>Приложение выдало Выполните в терминале: pip install qrcode pillow После установки ошибку пишет
+                        также.</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>записная книжка</h3>
+                <ul>
+                    <li>Получился просто блокнот (текстовый редактор)</li>
+                    <li>просто блокнот</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>игра Змейка</h3>
+                <ul>
+                    <li>вкусняшки спавнятся не на путях движения змейки, а между ними, не очевидно по какому пути
+                        ползти, чтобы съесть</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>калькулятор</h3>
+                <ul>
+                    <li>странные кнопки</li>
+                    <li>большие числа не вмещаются в экран. Плавающую точку не видно</li>
+                    <li>косяк со шрифтами (светлое на светлом)</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>приложение для просмотра изображений</h3>
+                <ul>
+                    <li>нет зума и автомасштабирования</li>
+                    <li>нельзя листать внутри папки</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>приложение показа погоды</h3>
+                <ul>
+                    <li>косяк со шрифтами (светлое на светлом)</li>
+                    <li>косяк со шрифтами (светлое на светлом)</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>простой браузер</h3>
+                <ul>
+                    <li>не удалось исправить ошибки</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>простой редактор изображений</h3>
+                <ul>
+                    <li>можно только поворачивать и менять цветовую гамму Blur непонятно что делает</li>
+                    <li>только поворот и чб -фильтр Blur непонятно что делает</li>
+                    <li>только поворот и чб -фильтр</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>секундомер</h3>
+                <ul>
+                    <li>нет кругов</li>
+                    <li>нет кругов</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>список дел</h3>
+                <ul>
+                    <li>косяк со шрифтами (светлое на светлом)</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>тетрис</h3>
+                <ul>
+                    <li>нарушено обновление экрана. Фигуры телепортируются вниз.</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>файловый менеджер</h3>
+                <ul>
+                    <li>нельзя вставлять и копировать</li>
+                    <li>нельзя вставлять и копировать</li>
+                </ul>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+
+</html>
