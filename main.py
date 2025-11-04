@@ -24,7 +24,7 @@ def main():
 
     #     agent.create_program(task)
 
-    with open("datasets/easy.json", "r", encoding="utf-8") as f:
+    with open("datasets/middle.json", "r", encoding="utf-8") as f:
         tasks = json.load(f)
 
     for task_item in tasks:

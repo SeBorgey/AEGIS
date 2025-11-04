@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import time
 
@@ -15,37 +16,71 @@ class CodeExecutor:
         return script_path
 
     def run_headless_test(self, script_path: str) -> tuple[bool, str]:
-        env = os.environ.copy()
-        env["QT_QPA_PLATFORM"] = "offscreen"
+        max_retries = 3
+        for i in range(max_retries):
+            env = os.environ.copy()
+            env["QT_QPA_PLATFORM"] = "offscreen"
 
-        process = subprocess.Popen(
-            ["python", script_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            env=env,
-        )
-
-        time.sleep(3)
-
-        return_code = process.poll()
-
-        if return_code is None:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-            return True, "Приложение успешно запустилось и работало 3 секунды."
-        else:
-            stdout, stderr = process.communicate()
-            return (
-                False,
-                stderr
-                or stdout
-                or f"Процесс завершился с кодом {return_code} без вывода.",
+            process = subprocess.Popen(
+                ["python", script_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                env=env,
             )
+
+            time.sleep(3)
+
+            return_code = process.poll()
+
+            if return_code is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                return True, "Приложение успешно запустилось и работало 3 секунды."
+            else:
+                stdout, stderr = process.communicate()
+                error_message = (
+                    stderr
+                    or stdout
+                    or f"Процесс завершился с кодом {return_code} без вывода."
+                )
+
+                if "ModuleNotFoundError" in stderr:
+                    match = re.search(r"No module named '([^']*)'", stderr)
+                    if match:
+                        package_name = match.group(1)
+                        print(
+                            f"Обнаружен отсутствующий модуль: {package_name}. Попытка установки... ({i + 1}/{max_retries})"
+                        )
+
+                        install_process = subprocess.run(
+                            ["python", "-m", "pip", "install", package_name],
+                            capture_output=True,
+                            text=True,
+                            encoding="utf-8",
+                        )
+
+                        if install_process.returncode == 0:
+                            print(
+                                f"Модуль {package_name} успешно установлен. Повторный запуск..."
+                            )
+                            continue  # Try running the script again
+                        else:
+                            return (
+                                False,
+                                f"Не удалось установить модуль {package_name}:\n{install_process.stderr}",
+                            )
+
+                return False, error_message
+
+        return (
+            False,
+            "Не удалось запустить приложение после нескольких попыток установки зависимостей.",
+        )
 
     def package_with_pyinstaller(self, script_path: str) -> tuple[bool, str]:
         dist_path = os.path.join(self.workspace_path, "dist")
