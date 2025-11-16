@@ -1,0 +1,117 @@
+import logging
+import os
+import shutil
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+
+class LogManager:
+    def __init__(
+        self,
+        base_dir: str = "logs",
+        retention_days: int = 7,
+        logger_name: str = "aegis",
+    ):
+        self.base_dir = Path(base_dir).resolve()
+        self.retention_days = int(retention_days)
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_name = f"run_{ts}_{os.getpid()}"
+        self.run_dir = self.base_dir / run_name
+        self.run_dir.mkdir(parents=True, exist_ok=True)
+        self.program_log_path = self.run_dir / "program.log"
+        self.chat_log_path = self.run_dir / "chat.md"
+        self._setup_logger(logger_name)
+        self._init_chat_file()
+        try:
+            self._cleanup_old_runs()
+        except Exception:
+            pass
+
+    def _setup_logger(self, logger_name: str):
+        self.logger = logging.getLogger(logger_name)
+        self.logger.setLevel(logging.DEBUG)
+        for h in list(self.logger.handlers):
+            self.logger.removeHandler(h)
+        sh = logging.StreamHandler()
+        fh = logging.FileHandler(self.program_log_path, encoding="utf-8")
+        fmt = logging.Formatter("%(asctime)s %(levelname)-5s %(name)s: %(message)s")
+        sh.setFormatter(fmt)
+        fh.setFormatter(fmt)
+        self.logger.addHandler(sh)
+        self.logger.addHandler(fh)
+
+    def _init_chat_file(self):
+        with open(self.chat_log_path, "w", encoding="utf-8") as f:
+            f.write("# Chat log\n\n")
+            self._write_chat_session_header(f, "initial")
+
+    def _write_chat_session_header(self, fileobj, session_name: str | None):
+        now = datetime.now(timezone.utc).astimezone()
+        ts = now.isoformat()
+        header = f"## New chat — {ts}"
+        if session_name:
+            header += f" — {session_name}"
+        header += "\n\n"
+        fileobj.write(header)
+
+    def start_chat(self, session_name: str | None = None):
+        with open(self.chat_log_path, "a", encoding="utf-8") as f:
+            self._write_chat_session_header(f, session_name)
+
+    def append_chat(self, role: str, text: str):
+        role = str(role)
+        with open(self.chat_log_path, "a", encoding="utf-8") as f:
+            now = datetime.now(timezone.utc).astimezone().isoformat()
+            f.write(f"### {role} — {now}\n")
+            f.write("```\n")
+            f.write(text.rstrip() + "\n")
+            f.write("```\n\n")
+
+    def info(self, msg: str):
+        self.logger.info(msg)
+
+    def debug(self, msg: str):
+        self.logger.debug(msg)
+
+    def warning(self, msg: str):
+        self.logger.warning(msg)
+
+    def error(self, msg: str):
+        self.logger.error(msg)
+
+    def exception(self, msg: str):
+        self.logger.exception(msg)
+
+    def _cleanup_old_runs(self):
+        cutoff = datetime.now() - timedelta(days=self.retention_days)
+        for child in sorted(self.base_dir.iterdir()):
+            if not child.is_dir():
+                continue
+            try:
+                mtime = datetime.fromtimestamp(child.stat().st_mtime)
+            except Exception:
+                continue
+            if mtime < cutoff:
+                try:
+                    shutil.rmtree(child)
+                except Exception:
+                    pass
+
+
+def setup_logging(
+    base_dir: str = "logs", retention_days: int = 7, logger_name: str = "aegis"
+):
+    lm = LogManager(
+        base_dir=base_dir, retention_days=retention_days, logger_name=logger_name
+    )
+    return lm, lm.logger
+
+
+# from log_manager import setup_logging
+# lm, logger = setup_logging(base_dir="logs", retention_days=7)
+# logger.info("Program start")
+# lm.start_chat("dataset-run")
+# lm.append_chat("system", "System prompt text")
+# lm.append_chat("user", "User question full text")
+# lm.append_chat("assistant", "Assistant full reply")
