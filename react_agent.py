@@ -4,6 +4,7 @@ from typing import Optional
 from action_api import ActionCall, ActionResult, ActionExecutor
 from llm_client import LLMClient
 from log_manager import LogManager
+from code_executor import CodeExecutor
 
 
 class ReActAgent:
@@ -11,11 +12,13 @@ class ReActAgent:
         self,
         llm_client: LLMClient,
         executor: ActionExecutor,
+        code_executor: CodeExecutor,
         log_manager: LogManager,
         max_iterations: int = 30,
     ):
         self.llm = llm_client
         self.executor = executor
+        self.code_executor = code_executor
         self.log = log_manager
         self.max_iterations = max_iterations
         self.messages = []
@@ -27,9 +30,7 @@ class ReActAgent:
 - read_file: {"path": "file.py"}
 - create_file: {"path": "file.py", "content": "код"}
 - edit_file: {"path": "file.py", "old": "старый текст", "new": "новый текст"}
-- run_command: {"cmd": ["python", "script.py"], "env": {"VAR": "value"}}
-
-Для тестирования PySide6 используй: {"cmd": ["python", "app.py"], "env": {"QT_QPA_PLATFORM": "offscreen"}}
+- run_command: {"cmd": ["команда", "аргументы"]} - любая терминальная команда
 
 Формат ответа (только JSON в ```json блоке):
 1. Выполнить действие:
@@ -39,23 +40,28 @@ class ReActAgent:
   "action": "имя_действия",
   "params": {...}
 }
-``` {data-source-line="48"}
+```
 
-2. Завершить:
+2. Завершить работу:
 ```json
 {
   "thought": "итоги работы",
   "done": true
 }
-``` {data-source-line="56"}
+```
 
 Требования:
-- Основной файл называй app.py
-- Используй только PySide6 для GUI
-- Не пиши комментарии
-- Тестируй перед завершением
-- Исправляй ошибки если появляются
-- Весь код в одном файле"""
+- Главный файл ОБЯЗАТЕЛЬНО называй app.py (точка входа)
+- Можешь создавать любую структуру проекта, сколько угодно файлов
+- Используй PySide6 для GUI
+- Главный файл app.py должен содержать if __name__ == "__main__": и запуск приложения
+
+Важно:
+- НЕ запускай приложение вручную через run_command
+- Когда сообщишь done: true - приложение автоматически протестируется
+- Если тест провалится - получишь ошибку и сможешь исправить
+- Устанавливай библиотеки (pip install) только если получил ошибку о их отсутствии
+- Не устанавливай библиотеки превентивно"""
 
     def _parse_response(self, text: str) -> Optional[dict]:
         match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
@@ -98,8 +104,19 @@ class ReActAgent:
                 continue
 
             if parsed.get("done"):
-                self.log.info("Task completed")
-                return True
+                self.log.info("Agent says done, testing app...")
+                test_success, test_message = self.code_executor.test_app("app.py")
+
+                if test_success:
+                    self.log.info("Test passed")
+                    return True
+
+                self.log.warning(f"Test failed: {test_message}")
+                self.log.append_chat("system", f"Тест провален:\n{test_message}")
+                self.messages.append(
+                    {"role": "user", "content": f"Приложение не работает. Ошибка:\n{test_message}\n\nИсправь."}
+                )
+                continue
 
             thought = parsed.get("thought", "")
             action_name = parsed.get("action")

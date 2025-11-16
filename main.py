@@ -31,11 +31,13 @@ def run_task(task_description: str, workspace: str, log_manager: LogManager) -> 
     policy = ActionPolicy(policy_config)
     registry = build_registry(policy)
     executor = ActionExecutor(policy, registry)
+    code_executor = CodeExecutor(str(workspace_path))
 
     llm_client = LLMClient(api_key=api_key)
     agent = ReActAgent(
         llm_client=llm_client,
         executor=executor,
+        code_executor=code_executor,
         log_manager=log_manager,
         max_iterations=50,
     )
@@ -48,7 +50,6 @@ def run_task(task_description: str, workspace: str, log_manager: LogManager) -> 
         return False
 
     log_manager.info("Agent completed, packaging...")
-    code_executor = CodeExecutor(str(workspace_path))
     pack_success, pack_message = code_executor.package_to_exe("app.py")
 
     if pack_success:
@@ -75,7 +76,7 @@ def main():
             log_manager.info(f"\n{'='*60}\n{task_item}\n{'='*60}")
             run_task(task, str(workspace), log_manager)
     else:
-        task = "Создай калькулятор с GUI на PySide6"
+        task = "Напиши мне супернавороченный калькулятор со всеми функциями и режимами! У меня темная тема, так что адаптируй цвета под нее."
         run_task(task, "workspaces/calculator", log_manager)
 
 
