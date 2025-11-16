@@ -1,33 +1,23 @@
-import re
-
 from openai import OpenAI, OpenAIError
 
 
 class LLMClient:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-pro"):
         if not api_key:
-            raise ValueError("API key is not provided.")
+            raise ValueError("API key required")
 
         self.client = OpenAI(
             api_key=api_key,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         )
+        self.model = model
 
-    def generate_code(self, messages: list[dict]) -> str:
+    def chat(self, messages: list[dict]) -> str:
         try:
             response = self.client.chat.completions.create(
-                model="gemini-2.5-pro",
-                messages=messages,
-                temperature=1,
+                model=self.model, messages=messages, temperature=0.7
             )
-
-            content = response.choices[0].message.content
-
-            match = re.search(r"```python\n(.*?)```", content, re.DOTALL)
-            if match:
-                return match.group(1).strip()
-            return content.strip()
-
+            return response.choices[0].message.content
         except OpenAIError as e:
-            print(f"Ошибка API запроса: {e}")
+            print(f"API error: {e}")
             return ""
