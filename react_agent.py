@@ -1,10 +1,11 @@
 import json
 import re
 from typing import Optional
-from action_api import ActionCall, ActionResult, ActionExecutor
+
+from action_api import ActionCall, ActionExecutor, ActionResult
+from code_executor import CodeExecutor
 from llm_client import LLMClient
 from log_manager import LogManager
-from code_executor import CodeExecutor
 
 
 class ReActAgent:
@@ -55,6 +56,7 @@ class ReActAgent:
 - Можешь создавать любую структуру проекта, сколько угодно файлов
 - Используй PySide6 для GUI
 - Главный файл app.py должен содержать if __name__ == "__main__": и запуск приложения
+- В одном сообщении может быть только одно поле "action".
 
 Важно:
 - НЕ запускай приложение вручную через run_command
@@ -114,7 +116,10 @@ class ReActAgent:
                 self.log.warning(f"Test failed: {test_message}")
                 self.log.append_chat("system", f"Тест провален:\n{test_message}")
                 self.messages.append(
-                    {"role": "user", "content": f"Приложение не работает. Ошибка:\n{test_message}\n\nИсправь."}
+                    {
+                        "role": "user",
+                        "content": f"Приложение не работает. Ошибка:\n{test_message}\n\nИсправь.",
+                    }
                 )
                 continue
 

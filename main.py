@@ -39,7 +39,7 @@ def run_task(task_description: str, workspace: str, log_manager: LogManager) -> 
         executor=executor,
         code_executor=code_executor,
         log_manager=log_manager,
-        max_iterations=50,
+        max_iterations=200,
     )
 
     log_manager.info(f"Task: {task_description}")
@@ -76,7 +76,7 @@ def main():
             log_manager.info(f"\n{'='*60}\n{task_item}\n{'='*60}")
             run_task(task, str(workspace), log_manager)
     else:
-        task = "Напиши мне супернавороченный калькулятор со всеми функциями и режимами! У меня темная тема, так что адаптируй цвета под нее."
+        task = "Напиши мне супернавороченный калькулятор со всеми функциями и режимами, нужен режим программиста, инженера, сохранения истории, работа со скобками, сделай ему несколько цветовых тем."
         run_task(task, "workspaces/calculator", log_manager)
 
 
