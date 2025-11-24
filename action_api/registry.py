@@ -14,6 +14,6 @@ def build_registry(policy: ActionPolicy) -> Dict[str, Callable]:
         "edit_file": partial(edit_file, root_dir=root),
         "get_file_tree": partial(get_file_tree, root_dir=root),
         "run_command": partial(run_command, root_dir=root, max_output_chars=policy.config.max_output_chars),
-        "run_ipython": run_ipython,
+        "run_ipython": partial(run_ipython, root_dir=root),
         "finish_task": finish_task,
     }
