@@ -38,11 +38,6 @@ class ActionPolicy:
             args = cmd
         if not args:
             raise ValueError("Empty command")
-        prog = Path(args[0]).name
-        if self.config.allowed_commands and prog not in self.config.allowed_commands:
-            raise ValueError(f"Command {prog} not allowed")
-        if shell and not self.config.allow_shell:
-            raise ValueError("Shell not allowed")
         return args
 
     def check(self, call: ActionCall) -> None:

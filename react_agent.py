@@ -31,23 +31,17 @@ class ReActAgent:
 - read_file: {"path": "file.py"}
 - create_file: {"path": "file.py", "content": "код"}
 - edit_file: {"path": "file.py", "old": "старый текст", "new": "новый текст"}
+- get_file_tree: {"start_path": ".", "max_depth": 2} - показать структуру файлов
 - run_command: {"cmd": ["команда", "аргументы"]} - любая терминальная команда
+- run_ipython: {"code": "print('hello')"} - выполнить python код в интерактивной среде (состояние сохраняется)
+- finish_task: {} - завершить выполнение задачи и запустить тесты
 
 Формат ответа (только JSON в ```json блоке):
-1. Выполнить действие:
 ```json
 {
   "thought": "что делаю и зачем",
   "action": "имя_действия",
   "params": {...}
-}
-```
-
-2. Завершить работу:
-```json
-{
-  "thought": "итоги работы",
-  "done": true
 }
 ```
 
@@ -60,7 +54,7 @@ class ReActAgent:
 
 Важно:
 - НЕ запускай приложение вручную через run_command
-- Когда сообщишь done: true - приложение автоматически протестируется
+- Когда закончишь, вызови finish_task - приложение автоматически протестируется
 - Если тест провалится - получишь ошибку и сможешь исправить
 - Устанавливай библиотеки (pip install) только если получил ошибку о их отсутствии
 - Не устанавливай библиотеки превентивно"""
@@ -105,8 +99,23 @@ class ReActAgent:
                 )
                 continue
 
-            if parsed.get("done"):
-                self.log.info("Agent says done, testing app...")
+            thought = parsed.get("thought", "")
+            action_name = parsed.get("action")
+            params = parsed.get("params", {})
+
+            if not action_name:
+                if parsed.get("done"):
+                     action_name = "finish_task"
+                else:
+                    self.log.warning("No action")
+                    self.messages.append({"role": "user", "content": "Укажи action"})
+                    continue
+
+            self.log.info(f"Thought: {thought}")
+            self.log.info(f"Action: {action_name}({params})")
+
+            if action_name == "finish_task":
+                self.log.info("Agent says finish_task, testing app...")
                 test_success, test_message = self.code_executor.test_app("app.py")
 
                 if test_success:
@@ -122,19 +131,7 @@ class ReActAgent:
                     }
                 )
                 continue
-
-            thought = parsed.get("thought", "")
-            action_name = parsed.get("action")
-            params = parsed.get("params", {})
-
-            if not action_name:
-                self.log.warning("No action")
-                self.messages.append({"role": "user", "content": "Укажи action"})
-                continue
-
-            self.log.info(f"Thought: {thought}")
-            self.log.info(f"Action: {action_name}({params})")
-
+            
             call = ActionCall(name=action_name, params=params)
             result = self.executor.execute(call)
 
