@@ -25,39 +25,39 @@ class ReActAgent:
         self.messages = []
 
     def _build_system_prompt(self) -> str:
-        return """Ты автономный агент-программист. Создаёшь программы на Python с GUI (PySide6).
+        return """You are an autonomous programmer agent. You create Python programs with GUI (PySide6).
 
-Доступные действия:
+Available actions:
 - read_file: {"path": "file.py"}
-- create_file: {"path": "file.py", "content": "код"}
-- edit_file: {"path": "file.py", "old": "старый текст", "new": "новый текст"}
-- get_file_tree: {"start_path": ".", "max_depth": 2} - показать структуру файлов
-- run_command: {"cmd": ["команда", "аргументы"]} - любая терминальная команда
-- run_ipython: {"code": "print('hello')"} - выполнить python код в интерактивной среде (состояние сохраняется)
-- finish_task: {} - завершить выполнение задачи и запустить тесты
+- create_file: {"path": "file.py", "content": "code"}
+- edit_file: {"path": "file.py", "old": "old text", "new": "new text"}
+- get_file_tree: {"start_path": ".", "max_depth": 2} - show file structure
+- run_command: {"cmd": ["command", "args"]} - any terminal command
+- run_ipython: {"code": "print('hello')"} - execute python code in interactive environment (state is preserved)
+- finish_task: {} - finish task execution and run tests
 
-Формат ответа (только JSON в ```json блоке):
+Response format (only JSON in ```json block):
 ```json
 {
-  "thought": "что делаю и зачем",
-  "action": "имя_действия",
+  "thought": "what I am doing and why",
+  "action": "action_name",
   "params": {...}
 }
 ```
 
-Требования:
-- Главный файл ОБЯЗАТЕЛЬНО называй app.py (точка входа)
-- Можешь создавать любую структуру проекта, сколько угодно файлов
-- Используй PySide6 для GUI
-- Главный файл app.py должен содержать if __name__ == "__main__": и запуск приложения
-- В одном сообщении может быть только одно поле "action".
+Requirements:
+- Main file MUST be named app.py (entry point)
+- You can create any project structure, as many files as needed
+- Use PySide6 for GUI
+- Main file app.py must contain if __name__ == "__main__": and application launch
+- Only one "action" field per message.
 
-Важно:
-- НЕ запускай приложение вручную через run_command
-- Когда закончишь, вызови finish_task - приложение автоматически протестируется
-- Если тест провалится - получишь ошибку и сможешь исправить
-- Устанавливай библиотеки (pip install) только если получил ошибку о их отсутствии
-- Не устанавливай библиотеки превентивно"""
+Important:
+- DO NOT launch the application manually via run_command
+- When finished, call finish_task - the application will be tested automatically
+- If the test fails - you will receive an error and can fix it
+- Install libraries (pip install) only if you receive an error about their absence
+- Do not install libraries preventively"""
 
     def _parse_response(self, text: str) -> Optional[dict]:
         match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
@@ -74,7 +74,7 @@ class ReActAgent:
         system_prompt = self._build_system_prompt()
         self.messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Задача: {task}"},
+            {"role": "user", "content": f"Task: {task}"},
         ]
 
         self.log.append_chat("system", system_prompt)
@@ -95,7 +95,7 @@ class ReActAgent:
             if not parsed:
                 self.log.warning("Failed to parse response")
                 self.messages.append(
-                    {"role": "user", "content": "Используй JSON формат в ```json блоке"}
+                    {"role": "user", "content": "Use JSON format in ```json block"}
                 )
                 continue
 
@@ -108,7 +108,7 @@ class ReActAgent:
                      action_name = "finish_task"
                 else:
                     self.log.warning("No action")
-                    self.messages.append({"role": "user", "content": "Укажи action"})
+                    self.messages.append({"role": "user", "content": "Specify action"})
                     continue
 
             self.log.info(f"Thought: {thought}")
@@ -123,11 +123,11 @@ class ReActAgent:
                     return True
 
                 self.log.warning(f"Test failed: {test_message}")
-                self.log.append_chat("system", f"Тест провален:\n{test_message}")
+                self.log.append_chat("system", f"Test failed:\n{test_message}")
                 self.messages.append(
                     {
                         "role": "user",
-                        "content": f"Приложение не работает. Ошибка:\n{test_message}\n\nИсправь.",
+                        "content": f"Application failed. Error:\n{test_message}\n\nFix it.",
                     }
                 )
                 continue
@@ -148,5 +148,5 @@ class ReActAgent:
     def _format_result(self, result: ActionResult) -> str:
         if result.success:
             data_str = json.dumps(result.data, ensure_ascii=False, indent=2)
-            return f"Успех:\n{data_str}"
-        return f"Ошибка: {result.error}"
+            return f"Success:\n{data_str}"
+        return f"Error: {result.error}"

@@ -63,7 +63,7 @@ def run_task(task_description: str, workspace: str, log_manager: LogManager) -> 
 def main():
     log_manager = LogManager(base_dir="logs", retention_days=7)
 
-    dataset_path = Path("datassets/middle.json")
+    dataset_path = Path("datasets/middle.json")
 
     if dataset_path.exists():
         with open(dataset_path, "r", encoding="utf-8") as f:
@@ -71,12 +71,12 @@ def main():
 
         for task_item in tasks:
             workspace = Path("workspaces") / task_item.replace(" ", "_")
-            task = f"Создай программу: {task_item}"
+            task = f"Create program: {task_item}"
 
             log_manager.info(f"\n{'='*60}\n{task_item}\n{'='*60}")
             run_task(task, str(workspace), log_manager)
     else:
-        task = "Создай Python пакет 'utils' с модулями для работы со строками и числами. Проверь созданную структуру файлов через get_file_tree. Протестируй функции пакета через run_ipython. Напиши GUI приложение (app.py), которое использует этот пакет."
+        task = "Create a Python package 'utils' with modules for string and number operations. Check the created file structure via get_file_tree. Test the package functions via run_ipython. Write a GUI application (app.py) that uses this package."
         run_task(task, "workspaces/calculator", log_manager)
 
 
