@@ -1,8 +1,9 @@
 from pydantic import BaseModel
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 from pathlib import Path
 from shlex import split as shlex_split
 from .models import ActionCall
+
 
 class PolicyConfig(BaseModel):
     root_dir: Path
@@ -12,6 +13,7 @@ class PolicyConfig(BaseModel):
     max_write_bytes: int = 1048576
     allow_shell: bool = False
     max_output_chars: int = 200000
+
 
 class ActionPolicy:
     def __init__(self, config: PolicyConfig):
@@ -26,7 +28,7 @@ class ActionPolicy:
         try:
             p.relative_to(self.config.root_dir)
         except ValueError:
-            raise ValueError("Path outside of root_dir")
+            raise ValueError("Path outside root_dir")
         return p
 
     def _validate_command(self, cmd: Union[str, List[str]], shell: Optional[bool]) -> List[str]:
@@ -38,56 +40,49 @@ class ActionPolicy:
             raise ValueError("Empty command")
         prog = Path(args[0]).name
         if self.config.allowed_commands and prog not in self.config.allowed_commands:
-            raise ValueError("Command not allowed")
+            raise ValueError(f"Command {prog} not allowed")
         if shell and not self.config.allow_shell:
-            raise ValueError("Shell execution not allowed")
+            raise ValueError("Shell not allowed")
         return args
 
     def check(self, call: ActionCall) -> None:
         n = call.name
         p = call.params
+
         if n == "read_file":
-            path = p.get("path")
-            if not path:
+            if not p.get("path"):
                 raise ValueError("Missing path")
-            abs_path = self._resolve_path(path)
-            p["path"] = str(abs_path)
+            p["path"] = str(self._resolve_path(p["path"]))
             max_bytes = p.get("max_bytes")
-            if max_bytes is not None and int(max_bytes) > self.config.max_read_bytes:
-                raise ValueError("max_bytes exceeds policy")
+            if max_bytes and int(max_bytes) > self.config.max_read_bytes:
+                raise ValueError("max_bytes exceeds limit")
+
         elif n == "create_file":
-            path = p.get("path")
-            if path is None:
+            if not p.get("path"):
                 raise ValueError("Missing path")
-            abs_path = self._resolve_path(path)
-            p["path"] = str(abs_path)
+            p["path"] = str(self._resolve_path(p["path"]))
             content = p.get("content", "")
             size = len(str(content).encode(p.get("encoding", "utf-8")))
             if size > self.config.max_write_bytes:
-                raise ValueError("Write exceeds policy")
+                raise ValueError("Content too large")
+
         elif n == "edit_file":
-            path = p.get("path")
-            if path is None:
+            if not p.get("path"):
                 raise ValueError("Missing path")
-            abs_path = self._resolve_path(path)
-            p["path"] = str(abs_path)
+            p["path"] = str(self._resolve_path(p["path"]))
             if "old" not in p or "new" not in p:
                 raise ValueError("Missing old or new")
-            new_size = len(str(p.get("new")).encode(p.get("encoding", "utf-8")))
-            if new_size > self.config.max_write_bytes:
-                raise ValueError("Write exceeds policy")
+
         elif n == "run_command":
-            cmd = p.get("cmd")
-            if cmd is None:
+            if not p.get("cmd"):
                 raise ValueError("Missing cmd")
-            shell = bool(p.get("shell", False))
-            args = self._validate_command(cmd, shell)
-            p["cmd"] = args
+            shell = p.get("shell", False)
+            p["cmd"] = self._validate_command(p["cmd"], shell)
             timeout = p.get("timeout_sec")
-            if timeout is not None and int(timeout) > self.config.command_timeout_sec:
-                raise ValueError("Timeout exceeds policy")
-            cwd = p.get("cwd")
-            if cwd:
-                p["cwd"] = str(self._resolve_path(cwd))
+            if timeout and int(timeout) > self.config.command_timeout_sec:
+                raise ValueError("Timeout exceeds limit")
+            if p.get("cwd"):
+                p["cwd"] = str(self._resolve_path(p["cwd"]))
+
         else:
-            raise ValueError("Unknown action")
+            raise ValueError(f"Unknown action: {n}")
