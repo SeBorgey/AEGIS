@@ -51,3 +51,43 @@ def edit_file(path: str, old: str, new: str, encoding: str = "utf-8", count: Opt
         return ActionResult(success=True, data={"path": str(p), "replaced": replaced})
     except Exception as e:
         return ActionResult(success=False, error=str(e))
+
+def get_file_tree(start_path: str = ".", max_depth: int = 2, root_dir: Optional[str] = None) -> ActionResult:
+    p = Path(start_path)
+    if not p.is_absolute() and root_dir:
+        p = Path(root_dir) / p
+    p = p.resolve()
+
+    if not p.exists():
+         return ActionResult(success=False, error=f"Path {p} does not exist")
+
+    def _tree(path: Path, depth: int) -> list:
+        if depth > max_depth:
+            return []
+        
+        res = []
+        try:
+            for child in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name)):
+                if child.name.startswith("."):
+                    continue
+                
+                info = {
+                    "name": child.name,
+                    "type": "dir" if child.is_dir() else "file"
+                }
+                if child.is_dir():
+                    children = _tree(child, depth + 1)
+                    if children:
+                        info["children"] = children
+                    elif depth < max_depth:
+                         info["children"] = []
+                res.append(info)
+        except PermissionError:
+            pass
+        return res
+
+    try:
+        tree = _tree(p, 1)
+        return ActionResult(success=True, data={"tree": tree})
+    except Exception as e:
+        return ActionResult(success=False, error=str(e))

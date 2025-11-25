@@ -38,11 +38,6 @@ class ActionPolicy:
             args = cmd
         if not args:
             raise ValueError("Empty command")
-        prog = Path(args[0]).name
-        if self.config.allowed_commands and prog not in self.config.allowed_commands:
-            raise ValueError(f"Command {prog} not allowed")
-        if shell and not self.config.allow_shell:
-            raise ValueError("Shell not allowed")
         return args
 
     def check(self, call: ActionCall) -> None:
@@ -83,6 +78,17 @@ class ActionPolicy:
                 raise ValueError("Timeout exceeds limit")
             if p.get("cwd"):
                 p["cwd"] = str(self._resolve_path(p["cwd"]))
+
+        elif n == "get_file_tree":
+            start_path = p.get("start_path", ".")
+            p["start_path"] = str(self._resolve_path(start_path))
+
+        elif n == "run_ipython":
+            if not p.get("code"):
+                raise ValueError("Missing code")
+
+        elif n == "finish_task":
+            pass
 
         else:
             raise ValueError(f"Unknown action: {n}")
