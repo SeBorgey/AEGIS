@@ -70,7 +70,8 @@ def run_task(task_description: str, workspace: str, log_manager: LogManager) -> 
 def main():
     log_manager = LogManager(base_dir="logs", retention_days=7)
 
-    dataset_path = Path("datassets/middle.json")
+    # dataset_path = Path("datasets/middle.json")
+    dataset_path = Path("non_existent_file.json")
 
     if dataset_path.exists():
         with open(dataset_path, "r", encoding="utf-8") as f:
