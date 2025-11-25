@@ -16,12 +16,14 @@ class ReActAgent:
         code_executor: CodeExecutor,
         log_manager: LogManager,
         max_iterations: int = 30,
+        agent_name: str = "coder",
     ):
         self.llm = llm_client
         self.executor = executor
         self.code_executor = code_executor
         self.log = log_manager
         self.max_iterations = max_iterations
+        self.agent_name = agent_name
         self.messages = []
 
     def _build_system_prompt(self) -> str:
@@ -69,16 +71,19 @@ Important:
         return None
 
     def run(self, task: str) -> bool:
-        self.log.start_chat("react")
+        self.log.start_chat(self.agent_name)
 
-        system_prompt = self._build_system_prompt()
-        self.messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Task: {task}"},
-        ]
-
-        self.log.append_chat("system", system_prompt)
-        self.log.append_chat("user", task)
+        if not self.messages:
+            system_prompt = self._build_system_prompt()
+            self.messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Task: {task}"},
+            ]
+            self.log.append_chat("system", system_prompt, self.agent_name)
+            self.log.append_chat("user", task, self.agent_name)
+        else:
+            self.messages.append({"role": "user", "content": task})
+            self.log.append_chat("user", task, self.agent_name)
 
         for iteration in range(self.max_iterations):
             self.log.info(f"Iteration {iteration + 1}/{self.max_iterations}")
@@ -88,7 +93,7 @@ Important:
                 self.log.error("Empty LLM response")
                 return False
 
-            self.log.append_chat("assistant", response)
+            self.log.append_chat("assistant", response, self.agent_name)
             self.messages.append({"role": "assistant", "content": response})
 
             parsed = self._parse_response(response)
@@ -123,7 +128,7 @@ Important:
                     return True
 
                 self.log.warning(f"Test failed: {test_message}")
-                self.log.append_chat("system", f"Test failed:\n{test_message}")
+                self.log.append_chat("system", f"Test failed:\n{test_message}", self.agent_name)
                 self.messages.append(
                     {
                         "role": "user",
@@ -136,7 +141,7 @@ Important:
             result = self.executor.execute(call)
 
             result_text = self._format_result(result)
-            self.log.append_chat("system", result_text)
+            self.log.append_chat("system", result_text, self.agent_name)
             self.messages.append({"role": "user", "content": result_text})
 
             if not result.success:
