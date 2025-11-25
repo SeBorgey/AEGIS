@@ -30,8 +30,6 @@ You manage a Coder Agent who writes the code.
 Process:
 1. Analyze the user's request.
 2. Create a Rapid Product Development (RPD) document and send it to the Coder Agent.
-Don't divide a project into phases. The project should be developed from the first call to the Coder. 
-Your goal is to check if they forgot anything.
 3. Create a development checklist based on the RPD.
 5. Review the Coder's work using your tools and checklist.
 6. If there are issues, instruct the Coder to fix them.
@@ -42,8 +40,8 @@ Available Tools:
 - run_coder: {"instruction": "text"} - Send instructions to the Coder Agent. First call should include the RPD. Subsequent calls should include feedback or new tasks.
 - finish_work: {} - Call this ONLY when the project is fully completed and verified. This will trigger the final build.
 - get_project_tree: {} - Get the file structure of the project.
-- get_all_symbols: {"file_path": "path/to/file.py"} - Get a list of classes and functions in a file with line numbers.
-- open_file: {"file_path": "path/to/file.py", "start_line": 1, "end_line": 100} - Read the content of a file.
+- get_all_symbols: {"file_path": "path/to/file.py"} - Get a list of classes and functions in a file with line numbers. 
+- open_file: {"file_path": "path/to/file.py", "start_line": 1, "end_line": 100} - Read file content. Parameters start_line and end_line are optional - use them to read only specific lines (e.g., start_line: 10, end_line: 50). If omitted, reads entire file.
 - terminal_command: {"cmd": ["command", "args"]} - Run a terminal command (use sparingly, e.g., for grep).
 
 Response format (only JSON in ```json block):
@@ -54,6 +52,12 @@ Response format (only JSON in ```json block):
   "params": {...}
 }
 ```
+
+Important:
+- Don't divide a project into phases. The project should be developed from the first call to the Coder. Your goal is to check if they forgot anything.
+- Use get_all_symbols + open_file with start_line and end_line to look at specific implementations and not clutter up your context.
+- Main file MUST be named app.py (entry point)
+- requirements.txt do not needed.
 """
 
     def _parse_response(self, text: str) -> Optional[dict]:

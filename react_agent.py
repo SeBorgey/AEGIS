@@ -59,7 +59,8 @@ Important:
 - When finished, call finish_task - the application will be tested automatically
 - If the test fails - you will receive an error and can fix it
 - Install libraries (pip install) only if you receive an error about their absence
-- Do not install libraries preventively"""
+- Do not install libraries preventively
+- Do not use placeholders TODO and others, write all the code at once."""
 
     def _parse_response(self, text: str) -> Optional[dict]:
         match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
