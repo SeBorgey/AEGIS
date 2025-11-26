@@ -9,7 +9,7 @@ from pathlib import Path
 class LogManager:
     def __init__(
         self,
-        base_dir: str = "logs",
+        base_dir: str = "runs",
         retention_days: int = 7,
         logger_name: str = "aegis",
     ):
@@ -20,8 +20,15 @@ class LogManager:
         run_name = f"run_{ts}_{os.getpid()}"
         self.run_dir = self.base_dir / run_name
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        self.program_log_path = self.run_dir / "program.log"
-        self.chat_log_path = self.run_dir / "chat.md"
+        
+        self.logs_dir = self.run_dir / "logs"
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.code_dir = self.run_dir / "code"
+        self.code_dir.mkdir(parents=True, exist_ok=True)
+
+        self.program_log_path = self.logs_dir / "program.log"
+        self.chat_log_path = self.logs_dir / "chat.md"
         self._setup_logger(logger_name)
 
         try:
@@ -57,7 +64,7 @@ class LogManager:
         fileobj.write(header)
 
     def start_chat(self, session_name: str = "main"):
-        self.chat_log_path = self.run_dir / f"{session_name}_chat.md"
+        self.chat_log_path = self.logs_dir / f"{session_name}_chat.md"
         if not self.chat_log_path.exists():
             with open(self.chat_log_path, "w", encoding="utf-8") as f:
                 f.write(f"# Chat log: {session_name}\n\n")
@@ -68,7 +75,7 @@ class LogManager:
 
     def append_chat(self, role: str, text: str, session_name: str = "main"):
         role = str(role)
-        chat_path = self.run_dir / f"{session_name}_chat.md"
+        chat_path = self.logs_dir / f"{session_name}_chat.md"
         if not chat_path.exists():
              with open(chat_path, "w", encoding="utf-8") as f:
                 f.write(f"# Chat log: {session_name}\n\n")
@@ -82,7 +89,7 @@ class LogManager:
             f.write("```\n\n")
 
     def save_metadata(self, metadata: dict):
-        metadata_path = self.run_dir / "metadata.json"
+        metadata_path = self.logs_dir / "metadata.json"
         current_metadata = {}
         if metadata_path.exists():
             try:
@@ -128,7 +135,7 @@ class LogManager:
 
 
 def setup_logging(
-    base_dir: str = "logs", retention_days: int = 7, logger_name: str = "aegis"
+    base_dir: str = "runs", retention_days: int = 7, logger_name: str = "aegis"
 ):
     lm = LogManager(
         base_dir=base_dir, retention_days=retention_days, logger_name=logger_name
