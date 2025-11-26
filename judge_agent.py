@@ -1,10 +1,11 @@
+import base64
 import json
 import os
 import re
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 from app_tester import AppTester
 from llm_client import LLMClient
@@ -145,23 +146,40 @@ Notes:
                     self.log.info(f"Judge finished. Score: {score}, Comment: {comment}")
                     return
 
-                result_text = self._execute_tool(action, params, iteration)
+                result_text, image_path = self._execute_tool(action, params, iteration)
                 
                 # Log result to chat (images are handled inside _execute_tool)
                 if not result_text.startswith("!["): # If not an image link (which is already logged)
                      self.log.append_chat("system", result_text, self.agent_name)
                 
-                self.messages.append({"role": "user", "content": result_text})
+                if image_path:
+                    try:
+                        with open(image_path, "rb") as img_file:
+                            b64_image = base64.b64encode(img_file.read()).decode("utf-8")
+                        
+                        message_content = [
+                            {"type": "text", "text": result_text},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/png;base64,{b64_image}"},
+                            },
+                        ]
+                        self.messages.append({"role": "user", "content": message_content})
+                    except Exception as e:
+                        self.log.error(f"Failed to encode image: {e}")
+                        self.messages.append({"role": "user", "content": result_text})
+                else:
+                    self.messages.append({"role": "user", "content": result_text})
 
         finally:
             self.tester.stop()
 
-    def _execute_tool(self, action: str, params: dict, iteration: int) -> str:
+    def _execute_tool(self, action: str, params: dict, iteration: int) -> Tuple[str, Optional[str]]:
         try:
             if action == "start":
                 app_path = self._find_executable()
                 if not app_path:
-                    return "Error: Could not find executable at code/dist/app"
+                    return "Error: Could not find executable at code/dist/app", None
                 self.tester.launch(app_path)
                 return self._capture_and_log_screenshot(f"step_{iteration}_start")
 
@@ -169,33 +187,33 @@ Notes:
                 x = params.get("x")
                 y = params.get("y")
                 if x is None or y is None:
-                    return "Error: x and y required"
+                    return "Error: x and y required", None
                 self.tester.click(int(x), int(y))
                 return self._capture_and_log_screenshot(f"step_{iteration}_click")
 
             elif action == "type_text":
                 text = params.get("text")
                 if not text:
-                    return "Error: text required"
+                    return "Error: text required", None
                 self.tester.gui.typewrite(text)
                 return self._capture_and_log_screenshot(f"step_{iteration}_type")
 
             elif action == "run_command":
                 cmd = params.get("cmd")
                 if not cmd:
-                    return "Error: cmd required"
+                    return "Error: cmd required", None
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, cwd=str(self.run_path)
                 )
-                return f"Stdout:\n{result.stdout}\nStderr:\n{result.stderr}"
+                return f"Stdout:\n{result.stdout}\nStderr:\n{result.stderr}", None
 
             else:
-                return f"Unknown tool: {action}"
+                return f"Unknown tool: {action}", None
 
         except Exception as e:
-            return f"Tool execution error: {str(e)}"
+            return f"Tool execution error: {str(e)}", None
 
-    def _capture_and_log_screenshot(self, name: str) -> str:
+    def _capture_and_log_screenshot(self, name: str) -> Tuple[str, str]:
         filename = f"{name}.png"
         save_path = self.log.logs_dir / filename
         self.tester.screenshot(str(save_path))
@@ -203,4 +221,4 @@ Notes:
         # Log image to chat
         self.log.append_image(filename, caption=name, role="system", session_name=self.agent_name)
         
-        return f"Screenshot captured: ![{name}]({filename})"
+        return f"Screenshot captured: ![{name}]({filename})", str(save_path)
