@@ -56,6 +56,7 @@ def run_task(task_description: str, workspace: str, log_manager: LogManager) -> 
     )
 
     log_manager.info(f"Task: {task_description}")
+    log_manager.save_metadata({"original_task": task_description})
     
     success = manager_agent.run(task_description)
 

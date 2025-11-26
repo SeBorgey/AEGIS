@@ -24,7 +24,7 @@ class ManagerAgent:
 
     def _build_system_prompt(self) -> str:
         return """You are a Project Manager Agent. Your goal is to oversee the development of a software project.
-This project myst be a Python program with GUI (PySide6).
+This project must be a Python program with GUI (PySide6).
 You manage a Coder Agent who writes the code. 
 
 Process:

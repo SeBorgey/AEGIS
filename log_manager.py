@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -22,7 +23,7 @@ class LogManager:
         self.program_log_path = self.run_dir / "program.log"
         self.chat_log_path = self.run_dir / "chat.md"
         self._setup_logger(logger_name)
-        self._setup_logger(logger_name)
+
         try:
             self._cleanup_old_runs()
         except Exception:
@@ -79,6 +80,21 @@ class LogManager:
             f.write("```\n")
             f.write(text.rstrip() + "\n")
             f.write("```\n\n")
+
+    def save_metadata(self, metadata: dict):
+        metadata_path = self.run_dir / "metadata.json"
+        current_metadata = {}
+        if metadata_path.exists():
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as f:
+                    current_metadata = json.load(f)
+            except Exception:
+                pass
+        
+        current_metadata.update(metadata)
+        
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            json.dump(current_metadata, f, indent=2, ensure_ascii=False)
 
     def info(self, msg: str):
         self.logger.info(msg)
