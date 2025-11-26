@@ -90,5 +90,34 @@ class ActionPolicy:
         elif n == "finish_task":
             pass
 
+        elif n == "run_coder":
+            if not p.get("instruction"):
+                raise ValueError("Missing instruction")
+
+        elif n == "finish_work":
+            pass
+
+        elif n == "get_project_tree":
+            start_path = p.get("start_path", ".")
+            p["start_path"] = str(self._resolve_path(start_path))
+
+        elif n == "get_all_symbols":
+            if not p.get("file_path"):
+                raise ValueError("Missing file_path")
+            p["file_path"] = str(self._resolve_path(p["file_path"]))
+
+        elif n == "open_file":
+            if not p.get("file_path"):
+                raise ValueError("Missing file_path")
+            p["file_path"] = str(self._resolve_path(p["file_path"]))
+
+        elif n == "terminal_command":
+             if not p.get("cmd"):
+                raise ValueError("Missing cmd")
+             shell = p.get("shell", False)
+             p["cmd"] = self._validate_command(p["cmd"], shell)
+             if p.get("cwd"):
+                p["cwd"] = str(self._resolve_path(p["cwd"]))
+
         else:
             raise ValueError(f"Unknown action: {n}")

@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -22,7 +23,7 @@ class LogManager:
         self.program_log_path = self.run_dir / "program.log"
         self.chat_log_path = self.run_dir / "chat.md"
         self._setup_logger(logger_name)
-        self._init_chat_file()
+
         try:
             self._cleanup_old_runs()
         except Exception:
@@ -55,18 +56,45 @@ class LogManager:
         header += "\n\n"
         fileobj.write(header)
 
-    def start_chat(self, session_name: str | None = None):
-        with open(self.chat_log_path, "a", encoding="utf-8") as f:
-            self._write_chat_session_header(f, session_name)
+    def start_chat(self, session_name: str = "main"):
+        self.chat_log_path = self.run_dir / f"{session_name}_chat.md"
+        if not self.chat_log_path.exists():
+            with open(self.chat_log_path, "w", encoding="utf-8") as f:
+                f.write(f"# Chat log: {session_name}\n\n")
+                self._write_chat_session_header(f, "initial")
+        else:
+             with open(self.chat_log_path, "a", encoding="utf-8") as f:
+                self._write_chat_session_header(f, "continued")
 
-    def append_chat(self, role: str, text: str):
+    def append_chat(self, role: str, text: str, session_name: str = "main"):
         role = str(role)
-        with open(self.chat_log_path, "a", encoding="utf-8") as f:
+        chat_path = self.run_dir / f"{session_name}_chat.md"
+        if not chat_path.exists():
+             with open(chat_path, "w", encoding="utf-8") as f:
+                f.write(f"# Chat log: {session_name}\n\n")
+                self._write_chat_session_header(f, "auto-created")
+
+        with open(chat_path, "a", encoding="utf-8") as f:
             now = datetime.now(timezone.utc).astimezone().isoformat()
             f.write(f"### {role} — {now}\n")
             f.write("```\n")
             f.write(text.rstrip() + "\n")
             f.write("```\n\n")
+
+    def save_metadata(self, metadata: dict):
+        metadata_path = self.run_dir / "metadata.json"
+        current_metadata = {}
+        if metadata_path.exists():
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as f:
+                    current_metadata = json.load(f)
+            except Exception:
+                pass
+        
+        current_metadata.update(metadata)
+        
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            json.dump(current_metadata, f, indent=2, ensure_ascii=False)
 
     def info(self, msg: str):
         self.logger.info(msg)

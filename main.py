@@ -4,9 +4,10 @@ from pathlib import Path
 
 from llm_client import LLMClient
 from react_agent import ReActAgent
+from manager_agent import ManagerAgent
 from code_executor import CodeExecutor
 from log_manager import LogManager
-from action_api import ActionPolicy, PolicyConfig, ActionExecutor, build_registry
+from action_api import ActionPolicy, PolicyConfig, ActionExecutor, build_registry, build_manager_registry
 
 
 def run_task(task_description: str, workspace: str, log_manager: LogManager) -> bool:
@@ -34,36 +35,44 @@ def run_task(task_description: str, workspace: str, log_manager: LogManager) -> 
     code_executor = CodeExecutor(str(workspace_path))
 
     llm_client = LLMClient(api_key=api_key)
-    agent = ReActAgent(
+    
+    coder_agent = ReActAgent(
         llm_client=llm_client,
         executor=executor,
         code_executor=code_executor,
         log_manager=log_manager,
-        max_iterations=200,
+        max_iterations=500,
+        agent_name="coder"
+    )
+
+    manager_registry = build_manager_registry(policy, coder_agent, code_executor)
+    manager_executor = ActionExecutor(policy, manager_registry)
+
+    manager_agent = ManagerAgent(
+        llm_client=llm_client,
+        executor=manager_executor,
+        log_manager=log_manager,
+        max_iterations=300
     )
 
     log_manager.info(f"Task: {task_description}")
-    success = agent.run(task_description)
+    log_manager.save_metadata({"original_task": task_description})
+    
+    success = manager_agent.run(task_description)
 
     if not success:
-        log_manager.error("Agent failed")
+        log_manager.error("Manager Agent failed")
         return False
 
-    log_manager.info("Agent completed, packaging...")
-    pack_success, pack_message = code_executor.package_to_exe("app.py")
-
-    if pack_success:
-        log_manager.info(pack_message)
-    else:
-        log_manager.error(pack_message)
-
-    return pack_success
+    log_manager.info("Manager Agent completed successfully.")
+    return True
 
 
 def main():
     log_manager = LogManager(base_dir="logs", retention_days=7)
 
-    dataset_path = Path("datasets/middle.json")
+    # dataset_path = Path("datasets/middle.json")
+    dataset_path = Path("non_existent_file.json")
 
     if dataset_path.exists():
         with open(dataset_path, "r", encoding="utf-8") as f:
@@ -76,7 +85,7 @@ def main():
             log_manager.info(f"\n{'='*60}\n{task_item}\n{'='*60}")
             run_task(task, str(workspace), log_manager)
     else:
-        task = "Create a Python package 'utils' with modules for string and number operations. Check the created file structure via get_file_tree. Test the package functions via run_ipython. Write a GUI application (app.py) that uses this package."
+        task = "Write me a calculator - a calculator-like version for Windows - with engineer and programmer modes, history, support for brackets and advanced mathematical operations."
         run_task(task, "workspaces/calculator", log_manager)
 
 
