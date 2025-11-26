@@ -12,14 +12,22 @@ class LogManager:
         base_dir: str = "runs",
         retention_days: int = 7,
         logger_name: str = "aegis",
+        existing_run_dir: str = None,
+        program_log_name: str = "program.log",
     ):
         self.base_dir = Path(base_dir).resolve()
         self.retention_days = int(retention_days)
         self.base_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_name = f"run_{ts}_{os.getpid()}"
-        self.run_dir = self.base_dir / run_name
-        self.run_dir.mkdir(parents=True, exist_ok=True)
+        
+        if existing_run_dir:
+             self.run_dir = Path(existing_run_dir).resolve()
+             if not self.run_dir.exists():
+                 raise ValueError(f"Run directory not found: {existing_run_dir}")
+        else:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            run_name = f"run_{ts}_{os.getpid()}"
+            self.run_dir = self.base_dir / run_name
+            self.run_dir.mkdir(parents=True, exist_ok=True)
         
         self.logs_dir = self.run_dir / "logs"
         self.logs_dir.mkdir(parents=True, exist_ok=True)
@@ -27,7 +35,7 @@ class LogManager:
         self.code_dir = self.run_dir / "code"
         self.code_dir.mkdir(parents=True, exist_ok=True)
 
-        self.program_log_path = self.logs_dir / "program.log"
+        self.program_log_path = self.logs_dir / program_log_name
         self.chat_log_path = self.logs_dir / "chat.md"
         self._setup_logger(logger_name)
 
@@ -87,6 +95,18 @@ class LogManager:
             f.write("```\n")
             f.write(text.rstrip() + "\n")
             f.write("```\n\n")
+
+    def append_image(self, image_local_path: str, caption: str = "", role: str = "system", session_name: str = "main"):
+        chat_path = self.logs_dir / f"{session_name}_chat.md"
+        if not chat_path.exists():
+             with open(chat_path, "w", encoding="utf-8") as f:
+                f.write(f"# Chat log: {session_name}\n\n")
+                self._write_chat_session_header(f, "auto-created")
+
+        with open(chat_path, "a", encoding="utf-8") as f:
+            now = datetime.now(timezone.utc).astimezone().isoformat()
+            f.write(f"### {role} — {now}\n")
+            f.write(f"![{caption}]({image_local_path})\n\n")
 
     def save_metadata(self, metadata: dict):
         metadata_path = self.logs_dir / "metadata.json"
