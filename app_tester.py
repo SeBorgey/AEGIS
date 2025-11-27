@@ -64,7 +64,7 @@ class AppTester:
                 pass
             time.sleep(0.5)
 
-    def click(self, x, y):
+    def _click_coords(self, x, y):
         try:
             wid = subprocess.check_output(
                  ['xdotool', 'getactivewindow'], env=os.environ, stderr=subprocess.DEVNULL
@@ -112,7 +112,7 @@ class AppTester:
         except Exception:
             self.gui.screenshot().save(save_path)
 
-    def print_interactive_elements(self):
+    def get_elements(self):
         desktop = pyatspi.Registry.getDesktop(0)
         found_apps = []
 
@@ -126,14 +126,14 @@ class AppTester:
             except Exception:
                 continue
         
-        print(f"{'Role':<20} | {'Name':<30} | {'X':<5} | {'Y':<5} | {'W':<5} | {'H':<5}")
-        print("-" * 85)
-        
+        elements = {}
         for app in found_apps:
             if app.name and ('python' in app.name.lower() or 'app' in app.name.lower()):
-                 self._traverse_tree(app)
+                 self._traverse_tree(app, elements)
+        
+        return elements
 
-    def _traverse_tree(self, obj):
+    def _traverse_tree(self, obj, elements):
         try:
             role = obj.getRoleName()
             name = obj.name
@@ -150,15 +150,35 @@ class AppTester:
             except:
                 x, y, w, h = -1, -1, 0, 0
 
-            if role in interactive_roles and w > 0 and h > 0:
-                safe_name = (name[:28] + '..') if len(name) > 28 else name
-                print(f"{role:<20} | {safe_name:<30} | {x:<5} | {y:<5} | {w:<5} | {h:<5}")
+            if role in interactive_roles and w > 0 and h > 0 and name:
+                elements[name] = (x, y, w, h)
 
             for i in range(obj.childCount):
-                self._traverse_tree(obj.getChildAtIndex(i))
+                self._traverse_tree(obj.getChildAtIndex(i), elements)
                 
         except Exception:
             pass
+    
+    def get_element_names(self):
+        return list(self.get_elements().keys())
+    
+    def click(self, widget_name):
+        elements = self.get_elements()
+        if widget_name not in elements:
+            raise ValueError(f"Element '{widget_name}' not found")
+        
+        x, y, w, h = elements[widget_name]
+        center_x = x + w // 2
+        center_y = y + h // 2
+        self._click_coords(center_x, center_y)
+    
+    def print_interactive_elements(self):
+        elements = self.get_elements()
+        print(f"{'Name':<30} | {'X':<5} | {'Y':<5} | {'W':<5} | {'H':<5}")
+        print("-" * 60)
+        for name, (x, y, w, h) in elements.items():
+            safe_name = (name[:28] + '..') if len(name) > 28 else name
+            print(f"{safe_name:<30} | {x:<5} | {y:<5} | {w:<5} | {h:<5}")
 
     def stop(self):
         if self.app_process:
@@ -181,14 +201,16 @@ if __name__ == "__main__":
         
         print("Initial State:")
         tester.print_interactive_elements()
+        print(tester.get_element_names())
         tester.screenshot("screenshot_1_initial.png")
-        
-        tester.click(X, Y) 
+        tester.click("Scientific")
+        tester.screenshot("screenshot_2_initial.png")
+        tester.print_interactive_elements()
         time.sleep(2)
         
-        print("\nState after interaction:")
-        tester.print_interactive_elements()
-        tester.screenshot("screenshot_2_after.png")
+        # print("\nState after interaction:")
+        # tester.print_interactive_elements()
+        # tester.screenshot("screenshot_2_after.png")
         
     finally:
         tester.stop()
