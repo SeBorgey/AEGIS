@@ -26,7 +26,6 @@ def main():
         if not run_dir.is_dir():
             continue
             
-        # Check if it's a valid run with an app
         app_path = run_dir / "code" / "dist" / "app"
         if not app_path.exists():
             print(f"Skipping {run_dir.name}: No app found at code/dist/app")
@@ -35,8 +34,6 @@ def main():
         print(f"\nEvaluating run: {run_dir.name}")
         
         try:
-            # Initialize LogManager pointing to the existing run directory
-            # and using a separate log file for the judge
             log_manager = LogManager(
                 base_dir="runs", 
                 logger_name=f"judge_{run_dir.name}",

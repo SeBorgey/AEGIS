@@ -18,7 +18,7 @@ class JudgeAgent:
         run_path: str,
         llm_client: LLMClient,
         log_manager: LogManager,
-        max_iterations: int = 20,
+        max_iterations: int = 200,
     ):
         self.run_path = Path(run_path).resolve()
         self.llm = llm_client
@@ -58,9 +58,9 @@ You must:
 4. Give a score (1-10) and a comment.
 
 Available Tools:
-- start: {{}} - Launch the app. Returns a screenshot.
-- click: {{"x": 100, "y": 200}} - Click at coordinates. Returns a screenshot.
-- type_text: {{"text": "hello"}} - Type text. Returns a screenshot.
+- start: {{}} - Launch the app. Returns a screenshot and list of available widgets.
+- click: {{"widget_name": "Button Name"}} - Click a widget by its name. Returns a screenshot and list of available widgets.
+- type_text: {{"text": "hello"}} - Type text. Returns a screenshot and list of available widgets.
 - run_command: {{"cmd": ["ls", "-la"]}} - Run a terminal command.
 - finish: {{"score": 8, "comment": "Good app but missing X"}} - Finish evaluation.
 
@@ -74,9 +74,11 @@ Response Format (JSON only):
 ```
 
 Notes:
-- You will receive screenshots after `start`, `click`, and `type_text`.
-- Analyze the screenshots to decide where to click next.
+- You will receive screenshots and a list of available interactive widgets after `start`, `click`, and `type_text`.
+- Use the widget names from the list to click on them.
+- Analyze the screenshots to decide what to do next.
 - Be critical but fair.
+- In response to this message, write a test plan and run the application.
 """
 
     def _parse_response(self, text: str) -> Optional[dict]:
@@ -184,11 +186,10 @@ Notes:
                 return self._capture_and_log_screenshot(f"step_{iteration}_start")
 
             elif action == "click":
-                x = params.get("x")
-                y = params.get("y")
-                if x is None or y is None:
-                    return "Error: x and y required", None
-                self.tester.click(int(x), int(y))
+                widget_name = params.get("widget_name")
+                if not widget_name:
+                    return "Error: widget_name required", None
+                self.tester.click(widget_name)
                 return self._capture_and_log_screenshot(f"step_{iteration}_click")
 
             elif action == "type_text":
@@ -218,7 +219,10 @@ Notes:
         save_path = self.log.logs_dir / filename
         self.tester.screenshot(str(save_path))
         
+        widget_names = self.tester.get_element_names()
+        widgets_text = "\n\nAvailable widgets: " + ", ".join(widget_names) if widget_names else "\n\nNo interactive widgets found."
+        
         # Log image to chat
         self.log.append_image(filename, caption=name, role="system", session_name=self.agent_name)
         
-        return f"Screenshot captured: ![{name}]({filename})", str(save_path)
+        return f"Screenshot captured: ![{name}]({filename}){widgets_text}", str(save_path)

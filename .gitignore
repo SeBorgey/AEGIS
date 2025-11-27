@@ -27,6 +27,7 @@ share/python-wheels/
 MANIFEST
 draft.md
 run.sh
+judge.sh
 papers/
 runs/
 # PyInstaller
@@ -53,7 +54,6 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
-
 # Translations
 *.mo
 *.pot
