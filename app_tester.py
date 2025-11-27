@@ -21,16 +21,15 @@ class AppTester:
         self.gui = pyautogui
         self.app_process = None
         self.window_id = None
-        self.app_name = None
+        self.app_pid = None
 
     def launch(self, app_path):
         if not os.path.exists(app_path):
             raise FileNotFoundError(f"{app_path} not found")
         
-        self.app_name = os.path.basename(app_path)
-        
         env = os.environ.copy()
         env['QT_LINUX_ACCESSIBILITY_ALWAYS_ON'] = '1'
+        env['QT_ACCESSIBILITY'] = '1'
         
         self.app_process = subprocess.Popen(
             [app_path],
@@ -38,6 +37,7 @@ class AppTester:
             stderr=subprocess.DEVNULL,
             env=env
         )
+        self.app_pid = self.app_process.pid
         self._wait_for_window()
 
     def _wait_for_window(self, timeout=10):
@@ -58,36 +58,42 @@ class AppTester:
                         check=True,
                         stderr=subprocess.DEVNULL
                     )
-                    time.sleep(0.5)
+                    time.sleep(1)
                     return
             except subprocess.CalledProcessError:
                 pass
             time.sleep(0.5)
-        raise TimeoutError("Application window did not appear")
 
     def click(self, x, y):
-        if not self.window_id:
-            self._wait_for_window()
-            
+        try:
+            wid = subprocess.check_output(
+                 ['xdotool', 'getactivewindow'], env=os.environ, stderr=subprocess.DEVNULL
+            ).decode().strip()
+            if wid:
+                self.window_id = wid
+        except:
+            pass
+
         subprocess.run(
             [
                 'xdotool', 
-                'windowfocus', '--sync', self.window_id,
-                'windowactivate', '--sync', self.window_id,
                 'mousemove', '--sync', str(x), str(y),
-                'sleep', '0.2',
+                'sleep', '0.1',
                 'click', '1'
             ],
             env=os.environ,
             check=True
         )
+        time.sleep(0.5)
 
     def _get_window_geometry(self):
-        if not self.window_id:
-            self._wait_for_window()
+        try:
+            wid = subprocess.check_output(['xdotool', 'getactivewindow'], env=os.environ).decode().strip()
+        except:
+            wid = self.window_id
 
         output = subprocess.check_output(
-            ['xwininfo', '-id', self.window_id],
+            ['xwininfo', '-id', wid],
             env=os.environ
         ).decode()
 
@@ -107,31 +113,27 @@ class AppTester:
             self.gui.screenshot().save(save_path)
 
     def print_interactive_elements(self):
-        # Получаем координаты самого окна, чтобы вычесть их
-        win_x, win_y, win_w, win_h = self._get_window_geometry()
-        
         desktop = pyatspi.Registry.getDesktop(0)
-        app_obj = None
-        
-        # Ищем наше приложение в дереве доступности
+        found_apps = []
+
         for i in range(desktop.childCount):
-            child = desktop.getChildAtIndex(i)
-            if self.app_name in child.name:
-                app_obj = child
-                break
+            try:
+                child = desktop.getChildAtIndex(i)
+                if child.getRoleName() == 'application':
+                    found_apps.append(child)
+                elif 'frame' in child.getRoleName():
+                     found_apps.append(child)
+            except Exception:
+                continue
         
-        if not app_obj:
-            print("Application accessibility tree not found.")
-            return
+        print(f"{'Role':<20} | {'Name':<30} | {'X':<5} | {'Y':<5} | {'W':<5} | {'H':<5}")
+        print("-" * 85)
+        
+        for app in found_apps:
+            if app.name and ('python' in app.name.lower() or 'app' in app.name.lower()):
+                 self._traverse_tree(app)
 
-        print(f"{'Role':<20} | {'Name':<30} | {'Rel X':<5} | {'Rel Y':<5} | {'W':<5} | {'H':<5}")
-        print("-" * 90)
-        # Передаем смещение окна в рекурсивную функцию
-        self._traverse_tree(app_obj, (win_x, win_y))
-
-
-    def _traverse_tree(self, obj, window_offset):
-        win_x, win_y = window_offset
+    def _traverse_tree(self, obj):
         try:
             role = obj.getRoleName()
             name = obj.name
@@ -139,24 +141,21 @@ class AppTester:
             interactive_roles = [
                 'push button', 'text', 'check box', 'radio button', 
                 'menu item', 'page tab', 'combo box', 'list item', 
-                'entry', 'spin button', 'slider'
+                'entry', 'spin button', 'slider', 'table cell', 'link'
             ]
 
-            if role in interactive_roles:
+            try:
                 component = obj.queryComponent()
-                # Получаем абсолютные координаты экрана
-                abs_x, abs_y, w, h = component.getExtents(pyatspi.DESKTOP_COORDS)
-                
-                # Вычисляем относительные координаты (внутри окна)
-                rel_x = abs_x - win_x
-                rel_y = abs_y - win_y
+                x, y, w, h = component.getExtents(pyatspi.DESKTOP_COORDS)
+            except:
+                x, y, w, h = -1, -1, 0, 0
 
-                # Фильтруем элементы с нулевыми размерами или те, что "улетели" за пределы окна
-                if w > 0 and h > 0 and rel_x >= 0 and rel_y >= 0:
-                     print(f"{role:<20} | {name[:28]:<30} | {rel_x:<5} | {rel_y:<5} | {w:<5} | {h:<5}")
+            if role in interactive_roles and w > 0 and h > 0:
+                safe_name = (name[:28] + '..') if len(name) > 28 else name
+                print(f"{role:<20} | {safe_name:<30} | {x:<5} | {y:<5} | {w:<5} | {h:<5}")
 
             for i in range(obj.childCount):
-                self._traverse_tree(obj.getChildAtIndex(i), window_offset)
+                self._traverse_tree(obj.getChildAtIndex(i))
                 
         except Exception:
             pass
@@ -180,13 +179,16 @@ if __name__ == "__main__":
         app_path = os.path.abspath("./app")
         tester.launch(app_path)
         
+        print("Initial State:")
         tester.print_interactive_elements()
+        tester.screenshot("screenshot_1_initial.png")
         
-        tester.screenshot("screenshot_initial.png")
+        tester.click(X, Y) 
+        time.sleep(2)
         
-        tester.click(165, 190) # Пример клика по координатам из списка
-        time.sleep(1)
-        tester.screenshot("screenshot_initial2.png")
-
+        print("\nState after interaction:")
+        tester.print_interactive_elements()
+        tester.screenshot("screenshot_2_after.png")
+        
     finally:
         tester.stop()
