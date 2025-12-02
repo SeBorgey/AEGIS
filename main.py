@@ -69,8 +69,6 @@ def run_task(task_description: str, workspace: str, log_manager: LogManager) -> 
 
 
 def main():
-    log_manager = LogManager(base_dir="logs", retention_days=7)
-
     # dataset_path = Path("datasets/middle.json")
     dataset_path = Path("non_existent_file.json")
 
@@ -79,14 +77,17 @@ def main():
             tasks = json.load(f)
 
         for task_item in tasks:
-            workspace = Path("workspaces") / task_item.replace(" ", "_")
+            lm = LogManager(base_dir="runs", retention_days=7)
             task = f"Create program: {task_item}"
 
-            log_manager.info(f"\n{'='*60}\n{task_item}\n{'='*60}")
-            run_task(task, str(workspace), log_manager)
+            lm.info(f"\n{'='*60}\n{task_item}\n{'='*60}")
+            lm.save_metadata({"original_task": task_item})
+            run_task(task, str(lm.code_dir), lm)
     else:
+        lm = LogManager(base_dir="runs", retention_days=7)
         task = "Write me a calculator - a calculator-like version for Windows - with engineer and programmer modes, history, support for brackets and advanced mathematical operations."
-        run_task(task, "workspaces/calculator", log_manager)
+        lm.save_metadata({"original_task": task})
+        run_task(task, str(lm.code_dir), lm)
 
 
 if __name__ == "__main__":
