@@ -1,14 +1,19 @@
 import os
 import json
-from typing import List, Dict, Any
+from dataclasses import asdict
+from typing import List, Dict
+
 try:
     from .parser import LogParser
     from .embeddings import EmbeddingGenerator
     from .selector import GreedySelector
+    from .models import Example
 except ImportError:
     from parser import LogParser
     from embeddings import EmbeddingGenerator
     from selector import GreedySelector
+    from models import Example
+
 
 class DatasetCollector:
     def __init__(self, runs_dir: str, output_dir: str, target_size: int = 1000):
@@ -19,9 +24,9 @@ class DatasetCollector:
         self.embedder = EmbeddingGenerator()
         self.selector = GreedySelector(target_size)
 
-    def collect(self):
+    def collect(self) -> None:
         print("Parsing logs...")
-        data = self.parser.parse_all()
+        data: Dict[str, List[Example]] = self.parser.parse_all()
         
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
@@ -42,10 +47,13 @@ class DatasetCollector:
             output_path = os.path.join(self.output_dir, f"{agent_type}_dataset.json")
             print(f"Saving {len(selected_examples)} examples to {output_path}...")
             
+            # Convert dataclasses to dicts for JSON serialization
+            serializable = [asdict(ex) for ex in selected_examples]
             with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(selected_examples, f, indent=2, ensure_ascii=False)
+                json.dump(serializable, f, indent=2, ensure_ascii=False)
                 
         print("Done.")
+
 
 if __name__ == "__main__":
     collector = DatasetCollector(
