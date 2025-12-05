@@ -28,6 +28,7 @@ MANIFEST
 draft.md
 run.sh
 judge.sh
+web_interface.sh
 papers/
 runs/
 # PyInstaller

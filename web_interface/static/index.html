@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGIS Agent Interface</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="background"></div>
+    <div class="container">
+        <header>
+            <h1>AEGIS</h1>
+            <p>Опишите задачу, и агент создаст приложение.</p>
+        </header>
+
+        <main id="main-content">
+            <div id="input-section" class="section active">
+                <textarea id="task-input" placeholder="Введите ваше ТЗ здесь..."></textarea>
+                <button id="send-btn" class="glow-on-hover">Запустить</button>
+            </div>
+
+            <div id="progress-section" class="section">
+                <div class="loader-container">
+                    <div class="loader"></div>
+                </div>
+                <h2>Выполняю задачу...</h2>
+                <div class="log-window">
+                    <pre id="log-output"></pre>
+                </div>
+            </div>
+
+            <div id="result-section" class="section">
+                <div class="icon-success">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                </div>
+                <h2>Приложение готово!</h2>
+                <div class="button-group">
+                    <a id="download-app-btn" href="#" class="download-button primary" target="_blank">
+                        <span class="icon">🚀</span> Скачать приложение
+                    </a>
+                    <a id="download-code-btn" href="#" class="download-button secondary" target="_blank">
+                        <span class="icon">📦</span> Скачать исходный код
+                    </a>
+                </div>
+                <button id="restart-btn" class="text-button">Новая задача</button>
+            </div>
+        </main>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+
+</html>
