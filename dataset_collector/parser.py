@@ -1,15 +1,21 @@
 import os
 import re
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict
+
+try:
+    from .models import Message, ActionData, Example
+except ImportError:
+    from models import Message, ActionData, Example
+
 
 class LogParser:
     def __init__(self, runs_dir: str):
         self.runs_dir = runs_dir
 
-    def parse_all(self) -> Dict[str, List[Dict[str, Any]]]:
-        coder_examples = []
-        manager_examples = []
+    def parse_all(self) -> Dict[str, List[Example]]:
+        coder_examples: List[Example] = []
+        manager_examples: List[Example] = []
 
         if not os.path.exists(self.runs_dir):
             return {"coder": [], "manager": []}
@@ -33,8 +39,8 @@ class LogParser:
 
         return {"coder": coder_examples, "manager": manager_examples}
 
-    def _parse_chat_file(self, file_path: str) -> List[Dict[str, Any]]:
-        examples = []
+    def _parse_chat_file(self, file_path: str) -> List[Example]:
+        examples: List[Example] = []
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
@@ -42,7 +48,7 @@ class LogParser:
         
         matches = list(message_pattern.finditer(content))
         
-        messages = []
+        messages: List[Message] = []
         for i in range(len(matches)):
             start = matches[i].end()
             end = matches[i+1].start() if i + 1 < len(matches) else len(content)
@@ -56,14 +62,14 @@ class LogParser:
                  if len(lines) >= 2:
                      msg_content = "\n".join(lines[1:-1])
             
-            messages.append({"role": role, "content": msg_content})
+            messages.append(Message(role=role, content=msg_content))
 
-        history = []
+        history: List[Message] = []
         
         for i, msg in enumerate(messages):
-            if msg['role'] == 'assistant':
+            if msg.role == 'assistant':
                 try:
-                    json_match = re.search(r'\{.*\}', msg['content'], re.DOTALL)
+                    json_match = re.search(r'\{.*\}', msg.content, re.DOTALL)
                     if json_match:
                         json_str = json_match.group(0)
                         action_data = json.loads(json_str)
@@ -72,22 +78,28 @@ class LogParser:
                             is_failed = False
                             if i + 1 < len(messages):
                                 next_msg = messages[i+1]
-                                if next_msg['role'] == 'system':
-                                    lower_content = next_msg['content'].lower()
+                                if next_msg.role == 'system':
+                                    lower_content = next_msg.content.lower()
                                     if "error" in lower_content or "failed" in lower_content or "exception" in lower_content:
                                         is_failed = True
                             
                             if not is_failed:
-                                complexity = 0
-                                if "thought" in action_data:
-                                    complexity = len(action_data["thought"])
+                                thought = action_data.get("thought", "")
+                                complexity = len(thought)
                                 
-                                examples.append({
-                                    "x": list(history),
-                                    "y": action_data["action"],
-                                    "y_full": action_data,
-                                    "complexity": complexity
-                                })
+                                # Extract extra fields (everything except action and thought)
+                                extra = {k: v for k, v in action_data.items() if k not in ("action", "thought")}
+                                
+                                examples.append(Example(
+                                    x=list(history),
+                                    y=action_data["action"],
+                                    y_full=ActionData(
+                                        action=action_data["action"],
+                                        thought=thought,
+                                        extra=extra
+                                    ),
+                                    complexity=complexity
+                                ))
                 except json.JSONDecodeError:
                     pass
             
