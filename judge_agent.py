@@ -1,4 +1,5 @@
 import base64
+import csv
 import json
 import os
 import re
@@ -143,6 +144,7 @@ Notes:
                     score = params.get("score")
                     comment = params.get("comment")
                     self.log.info(f"Judge finished. Score: {score}, Comment: {comment}")
+                    self._save_result(task, score, comment)
                     return
 
                 result_text, image_path = self._execute_tool(action, params, iteration)
@@ -171,6 +173,15 @@ Notes:
 
         finally:
             self.tester.stop()
+
+    def _save_result(self, task: str, score, comment: str):
+        csv_path = Path("runs") / "judge_results.csv"
+        file_exists = csv_path.exists()
+        with open(csv_path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+            if not file_exists:
+                writer.writerow(["run", "task", "score", "comment"])
+            writer.writerow([self.run_path.name, task, score, comment])
 
     def _execute_tool(self, action: str, params: dict, iteration: int) -> Tuple[str, Optional[str]]:
         try:
