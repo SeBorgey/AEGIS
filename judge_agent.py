@@ -29,12 +29,10 @@ class JudgeAgent:
         self.agent_name = "judge"
 
     def _get_original_task(self) -> str:
-        # Try logs/metadata/original_task
         task_file = self.run_path / "logs" / "metadata" / "original_task"
         if task_file.exists():
             return task_file.read_text(encoding="utf-8").strip()
         
-        # Try logs/metadata.json
         metadata_file = self.run_path / "logs" / "metadata.json"
         if metadata_file.exists():
             try:
@@ -111,7 +109,6 @@ Notes:
         self.log.append_chat("system", system_prompt, self.agent_name)
         self.log.append_chat("user", "Start evaluation.", self.agent_name)
 
-        # Try to find executable to help the agent
         exe_path = self._find_executable()
         if exe_path:
             self.log.info(f"Found executable: {exe_path}")
@@ -150,7 +147,6 @@ Notes:
 
                 result_text, image_path = self._execute_tool(action, params, iteration)
                 
-                # Log result to chat (images are handled inside _execute_tool)
                 if not result_text.startswith("!["): # If not an image link (which is already logged)
                      self.log.append_chat("system", result_text, self.agent_name)
                 
