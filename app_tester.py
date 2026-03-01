@@ -30,12 +30,16 @@ class AppTester:
         env = os.environ.copy()
         env['QT_LINUX_ACCESSIBILITY_ALWAYS_ON'] = '1'
         env['QT_ACCESSIBILITY'] = '1'
+
+        app_dir = os.path.dirname(os.path.abspath(app_path))
+        cwd = os.path.dirname(os.path.dirname(app_dir)) if os.path.basename(app_dir) == 'dist' else app_dir
         
         self.app_process = subprocess.Popen(
             [app_path],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            env=env
+            env=env,
+            cwd=cwd
         )
         self.app_pid = self.app_process.pid
         self._wait_for_window()
