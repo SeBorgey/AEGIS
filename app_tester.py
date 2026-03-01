@@ -87,10 +87,51 @@ class AppTester:
         time.sleep(0.5)
 
     def type_text(self, text):
+        # Очистить поле перед вводом (Ctrl+A, затем Backspace/Delete)
+        subprocess.run(
+            [
+                'xdotool',
+                'key', '--delay', '10', 'ctrl+a', 'BackSpace'
+            ],
+            env=os.environ,
+            check=False
+        )
+        time.sleep(0.1)
+
         subprocess.run(
             [
                 'xdotool', 
                 'type', '--delay', '10', text
+            ],
+            env=os.environ,
+            check=True
+        )
+        time.sleep(0.5)
+
+    def right_click(self, widget_name):
+        elements = self.get_elements()
+        if widget_name not in elements:
+            raise ValueError(f"Element '{widget_name}' not found")
+        
+        x, y, w, h = elements[widget_name]
+        center_x = x + w // 2
+        center_y = y + h // 2
+        
+        try:
+            wid = subprocess.check_output(
+                 ['xdotool', 'getactivewindow'], env=os.environ, stderr=subprocess.DEVNULL
+            ).decode().strip()
+            if wid:
+                self.window_id = wid
+        except:
+            pass
+
+        subprocess.run(
+            [
+                'xdotool', 
+                'mousemove', '--sync', str(center_x), str(center_y),
+                'sleep', '0.1',
+                'click', '3'
             ],
             env=os.environ,
             check=True

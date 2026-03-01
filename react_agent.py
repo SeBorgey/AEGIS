@@ -53,7 +53,9 @@ Important:
 - If the test fails - you will receive an error and can fix it
 - Install libraries (pip install) only if you receive an error about their absence
 - Do not install libraries preventively
-- Do not use placeholders TODO and others, write all the code at once."""
+- Do not use placeholders TODO and others, write all the code at once.
+- ALWAYS set accessibleName for buttons or interactive widgets that do not contain visible text (e.g., icon-only buttons) so the automated tester can find and click them.
+- DO NOT write placeholders for API keys in the code (e.g. `API_KEY = "your_key_here"`). If your application requires an API key, the GUI MUST ask the user to input it (e.g. via an input dialog or text field)."""
 
     def run(self, task: str) -> bool:
         self.log.start_chat(self.agent_name)

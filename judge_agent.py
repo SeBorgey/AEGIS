@@ -60,6 +60,7 @@ You must:
 Available Tools:
 - start: {{}} - Launch the app. Returns a screenshot and list of available widgets.
 - click: {{"widget_name": "Button Name"}} - Click a widget by its name. Returns a screenshot and list of available widgets.
+- right_click: {{"widget_name": "Button Name"}} - Right click a widget by its name. Returns a screenshot and list of available widgets.
 - type_text: {{"text": "hello", "widget_name": "Field Name"}} - Type text. 'widget_name' is optional, but highly recommended to click before typing. Returns a screenshot and list of available widgets.
 - run_command: {{"cmd": ["ls", "-la"]}} - Run a terminal command.
 - finish: {{"score": 8, "comment": "Good app but missing X"}} - Finish evaluation.
@@ -181,6 +182,13 @@ Notes:
                     return "Error: widget_name required", None
                 self.tester.click(widget_name)
                 return self._capture_and_log_screenshot(f"step_{iteration}_click")
+
+            elif action == "right_click":
+                widget_name = params.get("widget_name")
+                if not widget_name:
+                    return "Error: widget_name required", None
+                self.tester.right_click(widget_name)
+                return self._capture_and_log_screenshot(f"step_{iteration}_right_click")
 
             elif action == "type_text":
                 text = params.get("text")
