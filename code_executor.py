@@ -55,8 +55,20 @@ class CodeExecutor:
             "PyInstaller",
             "--onefile",
             "--windowed",
-            "--exclude-module",
-            "PyQt6",
+            "--exclude-module", "PyQt6",
+        ]
+
+        try:
+            with open(script_path, "r", encoding="utf-8") as f:
+                code_content = f.read()
+
+            for heavy_pkg in ["torch", "tensorflow", "tensorboard", "triton", "IPython", "transformers", "pandas", "numpy", "matplotlib"]:
+                if heavy_pkg not in code_content:
+                    command.extend(["--exclude-module", heavy_pkg])
+        except Exception:
+            pass
+
+        command.extend([
             "--distpath",
             str(dist_path),
             "--specpath",
@@ -64,7 +76,7 @@ class CodeExecutor:
             "--workpath",
             str(self.workspace / "build"),
             str(script_path),
-        ]
+        ])
 
         try:
             result = subprocess.run(
