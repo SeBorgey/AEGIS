@@ -208,10 +208,22 @@ Notes:
                 cmd = params.get("cmd")
                 if not cmd:
                     return "Error: cmd required", None
-                result = subprocess.run(
-                    cmd, capture_output=True, text=True, cwd=str(self.run_path)
-                )
-                return f"Stdout:\n{result.stdout}\nStderr:\n{result.stderr}", None
+                
+                # Forbid reading program.log
+                if any("program.log" in str(arg) for arg in cmd):
+                    return "Error: reading program.log is forbidden", None
+
+                try:
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True, cwd=str(self.run_path), timeout=30
+                    )
+                    
+                    stdout = result.stdout[:16384] + ("\n...[truncated]" if len(result.stdout) > 16384 else "")
+                    stderr = result.stderr[:16384] + ("\n...[truncated]" if len(result.stderr) > 16384 else "")
+                    
+                    return f"Stdout:\n{stdout}\nStderr:\n{stderr}", None
+                except subprocess.TimeoutExpired:
+                    return "Error: command timed out after 30 seconds", None
 
             else:
                 return f"Unknown tool: {action}", None
