@@ -63,6 +63,8 @@ Important:
         self.log.append_chat("system", system_prompt, self.agent_name)
         self.log.append_chat("user", user_request, self.agent_name)
 
+        finish_work_attempts = 0
+
         for iteration in range(self.max_iterations):
             self.log.info(f"Manager Iteration {iteration + 1}/{self.max_iterations}")
             
@@ -91,8 +93,15 @@ Important:
             self.log.append_chat("system", result_text, self.agent_name)
             self.messages.append({"role": "user", "content": result_text})
 
-            if action_name == "finish_work" and result.success:
-                return True
+            if action_name == "finish_work":
+                if result.success:
+                    return True
+                else:
+                    finish_work_attempts += 1
+                    if finish_work_attempts >= 5:
+                        self.log.error(f"Failed to finish work after {finish_work_attempts} attempts. Aborting.")
+                        self.messages.append({"role": "user", "content": f"System error: Failed to finish work after 5 attempts. The build process is broken. Stop trying and return an error."})
+                        return False
 
         self.log.error("Manager max iterations reached")
         return False

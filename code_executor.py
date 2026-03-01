@@ -55,6 +55,8 @@ class CodeExecutor:
             "PyInstaller",
             "--onefile",
             "--windowed",
+            "--exclude-module",
+            "PyQt6",
             "--distpath",
             str(dist_path),
             "--specpath",
