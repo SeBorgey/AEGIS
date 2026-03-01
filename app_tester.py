@@ -193,7 +193,8 @@ class AppTester:
             interactive_roles = [
                 'push button', 'text', 'check box', 'radio button', 
                 'menu item', 'page tab', 'combo box', 'list item', 
-                'entry', 'spin button', 'slider', 'table cell', 'link'
+                'entry', 'spin button', 'slider', 'table cell', 'link',
+                'password text'
             ]
 
             try:
