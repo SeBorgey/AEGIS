@@ -64,6 +64,9 @@ Available Tools:
 - run_command: {{"cmd": ["ls", "-la"]}} - Run a terminal command.
 - finish: {{"score": 8, "comment": "Good app but missing X"}} - Finish evaluation.
 
+CRITICAL RULE:
+- YOU ARE STRICTLY FORBIDDEN from reading source code (e.g., .py files). Your ONLY job is black-box testing. You can check side effects (databases, generated files) via run_command, but do NOT read the code to verify logic.
+
 Notes:
 - You will receive screenshots and a list of available interactive widgets after `start`, `click`, and `type_text`.
 - Use the widget names from the list to click on them.
