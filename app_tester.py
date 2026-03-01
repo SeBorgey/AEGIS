@@ -202,7 +202,7 @@ class AppTester:
             except:
                 x, y, w, h = -1, -1, 0, 0
 
-            if role in interactive_roles and w > 0 and h > 0:
+            if role in interactive_roles and w > 0 and h > 0 and x >= 0 and y >= 0:
                 base_name = name if name else role
                 widget_name = base_name
                 count = 1
