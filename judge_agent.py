@@ -62,7 +62,7 @@ Available Tools:
 - click: {{"widget_name": "Button Name"}} - Click a widget by its name. Returns a screenshot and list of available widgets.
 - right_click: {{"widget_name": "Button Name"}} - Right click a widget by its name. Returns a screenshot and list of available widgets.
 - type_text: {{"text": "hello", "widget_name": "Field Name"}} - Type text. 'widget_name' is optional, but highly recommended to click before typing. Returns a screenshot and list of available widgets.
-- run_command: {{"cmd": ["ls", "-la"]}} - Run a terminal command.
+- run_command: {{"cmd": "ls -la"}} - Run a terminal command (shell syntax supported).
 - finish: {{"score": 8, "comment": "Good app but missing X"}} - Finish evaluation.
 
 CRITICAL RULE:
@@ -214,8 +214,11 @@ Notes:
                     return "Error: reading program.log is forbidden", None
 
                 try:
+                    if isinstance(cmd, list):
+                        cmd = " ".join(str(c) for c in cmd)
+                    
                     result = subprocess.run(
-                        cmd, capture_output=True, text=True, cwd=str(self.run_path), timeout=30
+                        cmd, shell=True, capture_output=True, text=True, cwd=str(self.run_path), timeout=30
                     )
                     
                     stdout = result.stdout[:16384] + ("\n...[truncated]" if len(result.stdout) > 16384 else "")
