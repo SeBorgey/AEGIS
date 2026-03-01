@@ -2,7 +2,7 @@ import json
 import re
 from typing import Optional
 
-from action_api import ActionCall, ActionExecutor, ActionResult
+from action_api import ActionCall, ActionExecutor, ActionResult, AgentResponse
 from code_executor import CodeExecutor
 from llm_client import LLMClient
 from log_manager import LogManager
@@ -38,14 +38,7 @@ Available actions:
 - run_ipython: {"code": "print('hello')"} - execute python code in interactive environment (state is preserved)
 - finish_task: {} - finish task execution and run tests
 
-Response format (only JSON in ```json block):
-```json
-{
-  "thought": "what I am doing and why",
-  "action": "action_name",
-  "params": {...}
-}
-```
+
 
 Requirements:
 - Main file MUST be named app.py (entry point)
@@ -61,15 +54,6 @@ Important:
 - Install libraries (pip install) only if you receive an error about their absence
 - Do not install libraries preventively
 - Do not use placeholders TODO and others, write all the code at once."""
-
-    def _parse_response(self, text: str) -> Optional[dict]:
-        match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                return None
-        return None
 
     def run(self, task: str) -> bool:
         self.log.start_chat(self.agent_name)
@@ -89,28 +73,22 @@ Important:
         for iteration in range(self.max_iterations):
             self.log.info(f"Iteration {iteration + 1}/{self.max_iterations}")
 
-            response = self.llm.chat(self.messages)
+            response = self.llm.chat(self.messages, response_model=AgentResponse)
             if not response:
                 self.log.error("Empty LLM response")
                 return False
 
-            self.log.append_chat("assistant", response, self.agent_name)
-            self.messages.append({"role": "assistant", "content": response})
+            response_dict = response.model_dump() if hasattr(response, "model_dump") else response.dict()
+            response_json = json.dumps(response_dict, ensure_ascii=False, indent=2)
+            self.log.append_chat("assistant", f"```json\n{response_json}\n```", self.agent_name)
+            self.messages.append({"role": "assistant", "content": response_json})
 
-            parsed = self._parse_response(response)
-            if not parsed:
-                self.log.warning("Failed to parse response")
-                self.messages.append(
-                    {"role": "user", "content": "Use JSON format in ```json block"}
-                )
-                continue
-
-            thought = parsed.get("thought", "")
-            action_name = parsed.get("action")
-            params = parsed.get("params", {})
+            thought = response.thought
+            action_name = response.action
+            params = response.params
 
             if not action_name:
-                if parsed.get("done"):
+                if params.get("done"):
                      action_name = "finish_task"
                 else:
                     self.log.warning("No action")

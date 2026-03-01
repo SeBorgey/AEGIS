@@ -11,6 +11,7 @@ from typing import Optional, Tuple, Union
 from app_tester import AppTester
 from llm_client import LLMClient
 from log_manager import LogManager
+from action_api import AgentResponse
 
 
 class JudgeAgent:
@@ -63,15 +64,6 @@ Available Tools:
 - run_command: {{"cmd": ["ls", "-la"]}} - Run a terminal command.
 - finish: {{"score": 8, "comment": "Good app but missing X"}} - Finish evaluation.
 
-Response Format (JSON only):
-```json
-{{
-  "thought": "I need to launch the app first",
-  "action": "start",
-  "params": {{}}
-}}
-```
-
 Notes:
 - You will receive screenshots and a list of available interactive widgets after `start`, `click`, and `type_text`.
 - Use the widget names from the list to click on them.
@@ -79,15 +71,6 @@ Notes:
 - Be critical but fair.
 - In response to this message, write a test plan and run the application.
 """
-
-    def _parse_response(self, text: str) -> Optional[dict]:
-        match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                return None
-        return None
 
     def _find_executable(self) -> str:
         app_path = self.run_path / "code" / "dist" / "app"
@@ -119,23 +102,20 @@ Notes:
             for iteration in range(self.max_iterations):
                 self.log.info(f"Iteration {iteration + 1}/{self.max_iterations}")
                 
-                response = self.llm.chat(self.messages)
+                response = self.llm.chat(self.messages, response_model=AgentResponse)
                 if not response:
                     self.log.error("Empty LLM response")
                     break
 
-                self.log.append_chat("assistant", response, self.agent_name)
-                self.messages.append({"role": "assistant", "content": response})
+                response_dict = response.model_dump() if hasattr(response, "model_dump") else response.dict()
+                response_json = json.dumps(response_dict, ensure_ascii=False, indent=2)
 
-                parsed = self._parse_response(response)
-                if not parsed:
-                    self.log.warning("Failed to parse response")
-                    self.messages.append({"role": "user", "content": "Use JSON format in ```json block"})
-                    continue
+                self.log.append_chat("assistant", f"```json\n{response_json}\n```", self.agent_name)
+                self.messages.append({"role": "assistant", "content": response_json})
 
-                thought = parsed.get("thought", "")
-                action = parsed.get("action")
-                params = parsed.get("params", {})
+                thought = response.thought
+                action = response.action
+                params = response.params
 
                 self.log.info(f"Thought: {thought}")
                 self.log.info(f"Action: {action}({params})")

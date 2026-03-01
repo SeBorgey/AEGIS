@@ -4,7 +4,7 @@ import json
 
 from llm_client import LLMClient
 from log_manager import LogManager
-from action_api import ActionExecutor, ActionCall, ActionResult
+from action_api import ActionExecutor, ActionCall, ActionResult, AgentResponse
 
 
 class ManagerAgent:
@@ -44,31 +44,12 @@ Available Tools:
 - open_file: {"file_path": "path/to/file.py", "start_line": 1, "end_line": 100} - Read file content. Parameters start_line and end_line are optional - use them to read only specific lines (e.g., start_line: 10, end_line: 50). If omitted, reads entire file.
 - terminal_command: {"cmd": ["command", "args"]} - Run a terminal command (use sparingly, e.g., for grep).
 
-Response format (only JSON in ```json block):
-```json
-{
-  "thought": "reasoning",
-  "action": "tool_name",
-  "params": {...}
-}
-```
-
 Important:
 - Don't divide a project into phases. The project should be developed from the first call to the Coder. Your goal is to check if they forgot anything.
 - Use get_all_symbols + open_file with start_line and end_line to look at specific implementations and not clutter up your context.
 - Main file MUST be named app.py (entry point)
 - requirements.txt do not needed.
 """
-
-    def _parse_response(self, text: str) -> Optional[dict]:
-        import re
-        match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                return None
-        return None
 
     def run(self, user_request: str) -> bool:
         self.log.start_chat(self.agent_name)
@@ -85,25 +66,20 @@ Important:
         for iteration in range(self.max_iterations):
             self.log.info(f"Manager Iteration {iteration + 1}/{self.max_iterations}")
             
-            response = self.llm.chat(self.messages)
+            response = self.llm.chat(self.messages, response_model=AgentResponse)
             if not response:
                 self.log.error("Empty LLM response for Manager")
                 return False
 
-            self.log.append_chat("assistant", response, self.agent_name)
-            self.messages.append({"role": "assistant", "content": response})
+            response_dict = response.model_dump() if hasattr(response, "model_dump") else response.dict()
+            response_json = json.dumps(response_dict, ensure_ascii=False, indent=2)
 
-            parsed = self._parse_response(response)
-            if not parsed:
-                self.log.warning("Failed to parse Manager response")
-                self.messages.append(
-                    {"role": "user", "content": "Use JSON format in ```json block"}
-                )
-                continue
+            self.log.append_chat("assistant", f"```json\n{response_json}\n```", self.agent_name)
+            self.messages.append({"role": "assistant", "content": response_json})
 
-            thought = parsed.get("thought", "")
-            action_name = parsed.get("action")
-            params = parsed.get("params", {})
+            thought = response.thought
+            action_name = response.action
+            params = response.params
 
             self.log.info(f"Manager Thought: {thought}")
             self.log.info(f"Manager Action: {action_name}({params})")
