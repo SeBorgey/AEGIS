@@ -30,12 +30,16 @@ class AppTester:
         env = os.environ.copy()
         env['QT_LINUX_ACCESSIBILITY_ALWAYS_ON'] = '1'
         env['QT_ACCESSIBILITY'] = '1'
+
+        app_dir = os.path.dirname(os.path.abspath(app_path))
+        cwd = os.path.dirname(os.path.dirname(app_dir)) if os.path.basename(app_dir) == 'dist' else app_dir
         
         self.app_process = subprocess.Popen(
             [app_path],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            env=env
+            env=env,
+            cwd=cwd
         )
         self.app_pid = self.app_process.pid
         self._wait_for_window()
@@ -80,6 +84,58 @@ class AppTester:
                 'mousemove', '--sync', str(x), str(y),
                 'sleep', '0.1',
                 'click', '1'
+            ],
+            env=os.environ,
+            check=True
+        )
+        time.sleep(0.5)
+
+    def type_text(self, text):
+        # Очистить поле перед вводом (Ctrl+A, затем Backspace/Delete)
+        subprocess.run(
+            [
+                'xdotool',
+                'key', '--delay', '10', 'ctrl+a', 'BackSpace'
+            ],
+            env=os.environ,
+            check=False
+        )
+        time.sleep(0.1)
+
+        subprocess.run(
+            [
+                'xdotool', 
+                'type', '--delay', '10', text
+            ],
+            env=os.environ,
+            check=True
+        )
+        time.sleep(0.5)
+
+    def right_click(self, widget_name):
+        elements = self.get_elements()
+        if widget_name not in elements:
+            raise ValueError(f"Element '{widget_name}' not found")
+        
+        x, y, w, h = elements[widget_name]
+        center_x = x + w // 2
+        center_y = y + h // 2
+        
+        try:
+            wid = subprocess.check_output(
+                 ['xdotool', 'getactivewindow'], env=os.environ, stderr=subprocess.DEVNULL
+            ).decode().strip()
+            if wid:
+                self.window_id = wid
+        except:
+            pass
+
+        subprocess.run(
+            [
+                'xdotool', 
+                'mousemove', '--sync', str(center_x), str(center_y),
+                'sleep', '0.1',
+                'click', '3'
             ],
             env=os.environ,
             check=True
@@ -141,7 +197,8 @@ class AppTester:
             interactive_roles = [
                 'push button', 'text', 'check box', 'radio button', 
                 'menu item', 'page tab', 'combo box', 'list item', 
-                'entry', 'spin button', 'slider', 'table cell', 'link'
+                'entry', 'spin button', 'slider', 'table cell', 'link',
+                'password text'
             ]
 
             try:
@@ -150,8 +207,22 @@ class AppTester:
             except:
                 x, y, w, h = -1, -1, 0, 0
 
-            if role in interactive_roles and w > 0 and h > 0 and name:
-                elements[name] = (x, y, w, h)
+            is_showing = False
+            try:
+                state = obj.getState()
+                if state.contains(pyatspi.STATE_SHOWING):
+                    is_showing = True
+            except:
+                is_showing = True  # fallback
+
+            if role in interactive_roles and w > 0 and h > 0 and x >= 0 and y >= 0 and is_showing:
+                base_name = name if name else role
+                widget_name = base_name
+                count = 1
+                while widget_name in elements:
+                    widget_name = f"{base_name}_{count}"
+                    count += 1
+                elements[widget_name] = (x, y, w, h)
 
             for i in range(obj.childCount):
                 self._traverse_tree(obj.getChildAtIndex(i), elements)

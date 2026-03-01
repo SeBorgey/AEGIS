@@ -1,4 +1,5 @@
 import base64
+import csv
 import json
 import os
 import re
@@ -10,6 +11,7 @@ from typing import Optional, Tuple, Union
 from app_tester import AppTester
 from llm_client import LLMClient
 from log_manager import LogManager
+from action_api import AgentResponse
 
 
 class JudgeAgent:
@@ -58,18 +60,13 @@ You must:
 Available Tools:
 - start: {{}} - Launch the app. Returns a screenshot and list of available widgets.
 - click: {{"widget_name": "Button Name"}} - Click a widget by its name. Returns a screenshot and list of available widgets.
-- type_text: {{"text": "hello"}} - Type text. Returns a screenshot and list of available widgets.
-- run_command: {{"cmd": ["ls", "-la"]}} - Run a terminal command.
+- right_click: {{"widget_name": "Button Name"}} - Right click a widget by its name. Returns a screenshot and list of available widgets.
+- type_text: {{"text": "hello", "widget_name": "Field Name"}} - Type text. 'widget_name' is optional, but highly recommended to click before typing. Returns a screenshot and list of available widgets.
+- run_command: {{"cmd": "ls -la"}} - Run a terminal command (shell syntax supported).
 - finish: {{"score": 8, "comment": "Good app but missing X"}} - Finish evaluation.
 
-Response Format (JSON only):
-```json
-{{
-  "thought": "I need to launch the app first",
-  "action": "start",
-  "params": {{}}
-}}
-```
+CRITICAL RULE:
+- YOU ARE STRICTLY FORBIDDEN from reading source code (e.g., .py files). Your ONLY job is black-box testing. You can check side effects (databases, generated files) via run_command, but do NOT read the code to verify logic.
 
 Notes:
 - You will receive screenshots and a list of available interactive widgets after `start`, `click`, and `type_text`.
@@ -78,15 +75,6 @@ Notes:
 - Be critical but fair.
 - In response to this message, write a test plan and run the application.
 """
-
-    def _parse_response(self, text: str) -> Optional[dict]:
-        match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                return None
-        return None
 
     def _find_executable(self) -> str:
         app_path = self.run_path / "code" / "dist" / "app"
@@ -118,23 +106,20 @@ Notes:
             for iteration in range(self.max_iterations):
                 self.log.info(f"Iteration {iteration + 1}/{self.max_iterations}")
                 
-                response = self.llm.chat(self.messages)
+                response = self.llm.chat(self.messages, response_model=AgentResponse)
                 if not response:
                     self.log.error("Empty LLM response")
                     break
 
-                self.log.append_chat("assistant", response, self.agent_name)
-                self.messages.append({"role": "assistant", "content": response})
+                response_dict = response.model_dump() if hasattr(response, "model_dump") else response.dict()
+                response_json = json.dumps(response_dict, ensure_ascii=False, indent=2)
 
-                parsed = self._parse_response(response)
-                if not parsed:
-                    self.log.warning("Failed to parse response")
-                    self.messages.append({"role": "user", "content": "Use JSON format in ```json block"})
-                    continue
+                self.log.append_chat("assistant", f"```json\n{response_json}\n```", self.agent_name)
+                self.messages.append({"role": "assistant", "content": response_json})
 
-                thought = parsed.get("thought", "")
-                action = parsed.get("action")
-                params = parsed.get("params", {})
+                thought = response.thought
+                action = response.action
+                params = response.params
 
                 self.log.info(f"Thought: {thought}")
                 self.log.info(f"Action: {action}({params})")
@@ -143,6 +128,7 @@ Notes:
                     score = params.get("score")
                     comment = params.get("comment")
                     self.log.info(f"Judge finished. Score: {score}, Comment: {comment}")
+                    self._save_result(task, score, comment)
                     return
 
                 result_text, image_path = self._execute_tool(action, params, iteration)
@@ -172,6 +158,15 @@ Notes:
         finally:
             self.tester.stop()
 
+    def _save_result(self, task: str, score, comment: str):
+        csv_path = Path("runs") / "judge_results.csv"
+        file_exists = csv_path.exists()
+        with open(csv_path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+            if not file_exists:
+                writer.writerow(["run", "task", "score", "comment"])
+            writer.writerow([self.run_path.name, task, score, comment])
+
     def _execute_tool(self, action: str, params: dict, iteration: int) -> Tuple[str, Optional[str]]:
         try:
             if action == "start":
@@ -188,21 +183,50 @@ Notes:
                 self.tester.click(widget_name)
                 return self._capture_and_log_screenshot(f"step_{iteration}_click")
 
+            elif action == "right_click":
+                widget_name = params.get("widget_name")
+                if not widget_name:
+                    return "Error: widget_name required", None
+                self.tester.right_click(widget_name)
+                return self._capture_and_log_screenshot(f"step_{iteration}_right_click")
+
             elif action == "type_text":
                 text = params.get("text")
+                widget_name = params.get("widget_name")
                 if not text:
                     return "Error: text required", None
-                self.tester.gui.typewrite(text)
+                if widget_name:
+                    try:
+                        self.tester.click(widget_name)
+                        time.sleep(0.5)
+                    except ValueError:
+                        return f"Error: Widget '{widget_name}' not found", None
+                self.tester.type_text(text)
                 return self._capture_and_log_screenshot(f"step_{iteration}_type")
 
             elif action == "run_command":
                 cmd = params.get("cmd")
                 if not cmd:
                     return "Error: cmd required", None
-                result = subprocess.run(
-                    cmd, capture_output=True, text=True, cwd=str(self.run_path)
-                )
-                return f"Stdout:\n{result.stdout}\nStderr:\n{result.stderr}", None
+                
+                # Forbid reading program.log
+                if any("program.log" in str(arg) for arg in cmd):
+                    return "Error: reading program.log is forbidden", None
+
+                try:
+                    if isinstance(cmd, list):
+                        cmd = " ".join(str(c) for c in cmd)
+                    
+                    result = subprocess.run(
+                        cmd, shell=True, capture_output=True, text=True, cwd=str(self.run_path), timeout=30
+                    )
+                    
+                    stdout = result.stdout[:16384] + ("\n...[truncated]" if len(result.stdout) > 16384 else "")
+                    stderr = result.stderr[:16384] + ("\n...[truncated]" if len(result.stderr) > 16384 else "")
+                    
+                    return f"Stdout:\n{stdout}\nStderr:\n{stderr}", None
+                except subprocess.TimeoutExpired:
+                    return "Error: command timed out after 30 seconds", None
 
             else:
                 return f"Unknown tool: {action}", None

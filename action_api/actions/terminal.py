@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, Optional, Union, List
 from ..models import ActionResult
 
-def run_command(cmd: Union[str, List[str]], timeout_sec: Optional[int] = None, cwd: Optional[str] = None, shell: bool = False, env: Optional[Dict[str, str]] = None, max_output_chars: Optional[int] = None, root_dir: Optional[str] = None) -> ActionResult:
+def run_command(cmd: Union[str, List[str]], timeout_sec: Optional[int] = 30, cwd: Optional[str] = None, shell: bool = False, env: Optional[Dict[str, str]] = None, max_output_chars: Optional[int] = None, root_dir: Optional[str] = None) -> ActionResult:
     args = cmd
     if cwd is None and root_dir:
         cwd = str(Path(root_dir).resolve())
