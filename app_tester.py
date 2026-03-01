@@ -207,7 +207,15 @@ class AppTester:
             except:
                 x, y, w, h = -1, -1, 0, 0
 
-            if role in interactive_roles and w > 0 and h > 0 and x >= 0 and y >= 0:
+            is_showing = False
+            try:
+                state = obj.getState()
+                if state.contains(pyatspi.STATE_SHOWING):
+                    is_showing = True
+            except:
+                is_showing = True  # fallback
+
+            if role in interactive_roles and w > 0 and h > 0 and x >= 0 and y >= 0 and is_showing:
                 base_name = name if name else role
                 widget_name = base_name
                 count = 1
