@@ -59,7 +59,7 @@ You must:
 Available Tools:
 - start: {{}} - Launch the app. Returns a screenshot and list of available widgets.
 - click: {{"widget_name": "Button Name"}} - Click a widget by its name. Returns a screenshot and list of available widgets.
-- type_text: {{"text": "hello"}} - Type text. Returns a screenshot and list of available widgets.
+- type_text: {{"text": "hello", "widget_name": "Field Name"}} - Type text. 'widget_name' is optional, but highly recommended to click before typing. Returns a screenshot and list of available widgets.
 - run_command: {{"cmd": ["ls", "-la"]}} - Run a terminal command.
 - finish: {{"score": 8, "comment": "Good app but missing X"}} - Finish evaluation.
 
@@ -201,9 +201,16 @@ Notes:
 
             elif action == "type_text":
                 text = params.get("text")
+                widget_name = params.get("widget_name")
                 if not text:
                     return "Error: text required", None
-                self.tester.gui.typewrite(text)
+                if widget_name:
+                    try:
+                        self.tester.click(widget_name)
+                        time.sleep(0.5)
+                    except ValueError:
+                        return f"Error: Widget '{widget_name}' not found", None
+                self.tester.type_text(text)
                 return self._capture_and_log_screenshot(f"step_{iteration}_type")
 
             elif action == "run_command":

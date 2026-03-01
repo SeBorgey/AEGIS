@@ -86,6 +86,17 @@ class AppTester:
         )
         time.sleep(0.5)
 
+    def type_text(self, text):
+        subprocess.run(
+            [
+                'xdotool', 
+                'type', '--delay', '10', text
+            ],
+            env=os.environ,
+            check=True
+        )
+        time.sleep(0.5)
+
     def _get_window_geometry(self):
         try:
             wid = subprocess.check_output(['xdotool', 'getactivewindow'], env=os.environ).decode().strip()
@@ -150,8 +161,14 @@ class AppTester:
             except:
                 x, y, w, h = -1, -1, 0, 0
 
-            if role in interactive_roles and w > 0 and h > 0 and name:
-                elements[name] = (x, y, w, h)
+            if role in interactive_roles and w > 0 and h > 0:
+                base_name = name if name else role
+                widget_name = base_name
+                count = 1
+                while widget_name in elements:
+                    widget_name = f"{base_name}_{count}"
+                    count += 1
+                elements[widget_name] = (x, y, w, h)
 
             for i in range(obj.childCount):
                 self._traverse_tree(obj.getChildAtIndex(i), elements)
