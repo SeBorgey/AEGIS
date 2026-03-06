@@ -21,23 +21,16 @@ class LLMClient:
         for attempt in range(1, self.max_retries + 1):
             try:
                 if response_model:
-                    schema = response_model.model_json_schema()
-                    response = self.client.chat.completions.create(
+                    response = self.client.chat.completions.parse(
                         model=self.model,
                         messages=messages,
-                        response_format={
-                            "type": "json_schema",
-                            "json_schema": {
-                                "name": response_model.__name__,
-                                "schema": schema
-                            }
-                        }
+                        response_format=response_model,
                     )
-                    content = response.choices[0].message.content
-                    if content:
-                        import re
-                        clean_content = re.sub(r"^```json\s*|\s*```$", "", content.strip())
-                        return response_model.model_validate_json(clean_content)
+                    message = response.choices[0].message
+                    if getattr(message, "parsed", None):
+                        return message.parsed
+                    elif getattr(message, "refusal", None):
+                        print(f"Model refused: {message.refusal}")
                 else:
                     response = self.client.chat.completions.create(
                         model=self.model, messages=messages, temperature=0.7

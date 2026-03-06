@@ -81,7 +81,7 @@ Important:
 
             thought = response.thought
             action_name = response.action
-            params = response.params
+            params = response.params.model_dump(exclude_none=True) if hasattr(response.params, "model_dump") else response.params
 
             self.log.info(f"Manager Thought: {thought}")
             self.log.info(f"Manager Action: {action_name}({params})")

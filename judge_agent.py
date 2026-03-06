@@ -119,7 +119,7 @@ Notes:
 
                 thought = response.thought
                 action = response.action
-                params = response.params
+                params = response.params.model_dump(exclude_none=True) if hasattr(response.params, "model_dump") else response.params
 
                 self.log.info(f"Thought: {thought}")
                 self.log.info(f"Action: {action}({params})")
