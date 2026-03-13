@@ -42,6 +42,35 @@ class CodeExecutor:
         error_message = stderr or stdout or f"Process exited with code {return_code}"
         return False, error_message
 
+    def _verify_exe(self, exe_path: Path) -> tuple[bool, str]:
+        env = os.environ.copy()
+        env["QT_QPA_PLATFORM"] = "offscreen"
+
+        process = subprocess.Popen(
+            [str(exe_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            cwd=str(self.workspace),
+        )
+
+        time.sleep(3)
+        return_code = process.poll()
+
+        if return_code is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+            return True, "Exe verification passed"
+
+        stdout, stderr = process.communicate()
+        error_message = stderr or stdout or f"Exe exited with code {return_code}"
+        return False, error_message
+
     def package_to_exe(self, script_name: str = "app.py") -> tuple[bool, str]:
         script_path = self.workspace / script_name
         if not script_path.exists():
@@ -91,10 +120,14 @@ class CodeExecutor:
             exe_name = f"{script_path.stem}.exe" if os.name == "nt" else script_path.stem
             exe_path = dist_path / exe_name
 
-            if exe_path.exists():
-                return True, f"Success: {exe_path.absolute()}"
+            if not exe_path.exists():
+                return False, f"Executable not found\n{result.stdout}\n{result.stderr}"
 
-            return False, f"Executable not found\n{result.stdout}\n{result.stderr}"
+            ok, msg = self._verify_exe(exe_path)
+            if not ok:
+                return False, f"Build succeeded but exe failed to start:\n{msg}"
+
+            return True, f"Success: {exe_path.absolute()}"
 
         except subprocess.CalledProcessError as e:
             return False, f"PyInstaller error:\n{e.stderr}"
