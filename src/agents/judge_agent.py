@@ -8,9 +8,9 @@ import time
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
-from app_tester import AppTester
-from llm_client import LLMClient
-from log_manager import LogManager
+from core.app_tester import AppTester
+from core.llm_client import LLMClient
+from core.log_manager import LogManager
 from action_api import AgentResponse
 
 

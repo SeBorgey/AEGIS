@@ -2,11 +2,11 @@ import os
 import json
 from pathlib import Path
 
-from llm_client import LLMClient
-from react_agent import ReActAgent
-from manager_agent import ManagerAgent
-from code_executor import CodeExecutor
-from log_manager import LogManager
+from core.llm_client import LLMClient
+from agents.coder_agent import ReActAgent
+from agents.manager_agent import ManagerAgent
+from core.code_executor import CodeExecutor
+from core.log_manager import LogManager
 from action_api import ActionPolicy, PolicyConfig, ActionExecutor, build_registry, build_manager_registry
 
 

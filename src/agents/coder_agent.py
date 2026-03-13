@@ -3,9 +3,9 @@ import re
 from typing import Optional
 
 from action_api import ActionCall, ActionExecutor, ActionResult, AgentResponse
-from code_executor import CodeExecutor
-from llm_client import LLMClient
-from log_manager import LogManager
+from core.code_executor import CodeExecutor
+from core.llm_client import LLMClient
+from core.log_manager import LogManager
 
 
 class ReActAgent:

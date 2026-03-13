@@ -11,8 +11,8 @@ from pydantic import BaseModel
 project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
-from main import run_task
-from log_manager import LogManager
+from src.main import run_task
+from src.core.log_manager import LogManager
 
 app = FastAPI()
 

@@ -2,8 +2,8 @@ from typing import Optional
 from pathlib import Path
 import json
 
-from llm_client import LLMClient
-from log_manager import LogManager
+from core.llm_client import LLMClient
+from core.log_manager import LogManager
 from action_api import ActionExecutor, ActionCall, ActionResult, AgentResponse
 
 
