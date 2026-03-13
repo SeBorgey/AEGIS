@@ -74,6 +74,7 @@ Notes:
 - Analyze the screenshots to decide what to do next.
 - Be critical but fair.
 - In response to this message, write a test plan and run the application.
+- You cannot drag-and-drop or click by coordinates, so do not plan such checks.
 """
 
     def _find_executable(self) -> str:
