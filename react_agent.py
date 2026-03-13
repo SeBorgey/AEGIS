@@ -50,6 +50,7 @@ Requirements:
 Important:
 - Do not use the next libs: "torch", "tensorflow", "tensorboard", "triton", "IPython", "transformers", "pandas", "numpy", "matplotlib", and other libs with big size to pack into PyInstaller.
 - DO NOT launch the application manually via run_command
+- Do not add keybinds - there must be a graphic widget on every action.
 - When finished, call finish_task - the application will be tested automatically
 - If the test fails - you will receive an error and can fix it
 - Install libraries (pip install) only if you receive an error about their absence
