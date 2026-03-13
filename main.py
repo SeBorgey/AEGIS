@@ -69,7 +69,7 @@ def run_task(task_description: str, workspace: str, log_manager: LogManager) -> 
 
 
 def main():
-    # dataset_path = Path("datasets/middle.json")
+    # dataset_path = Path("datasets/hard.json")
     dataset_path = Path("non_existent_file.json")
 
     if dataset_path.exists():
@@ -85,7 +85,7 @@ def main():
             run_task(task, str(lm.code_dir), lm)
     else:
         lm = LogManager(base_dir="runs", retention_days=7)
-        task = "Write me a calculator - a calculator-like version for Windows - with engineer and programmer modes, history, support for brackets and advanced mathematical operations."
+        task = "Create program: GeoText text analyzer extracting and mapping cities and countries from loaded document"
         lm.save_metadata({"original_task": task})
         run_task(task, str(lm.code_dir), lm)
 
