@@ -8,9 +8,9 @@ import time
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
-from app_tester import AppTester
-from llm_client import LLMClient
-from log_manager import LogManager
+from core.app_tester import AppTester
+from core.llm_client import LLMClient
+from core.log_manager import LogManager
 from action_api import AgentResponse
 
 
@@ -74,6 +74,7 @@ Notes:
 - Analyze the screenshots to decide what to do next.
 - Be critical but fair.
 - In response to this message, write a test plan and run the application.
+- You cannot drag-and-drop or click by coordinates, so do not plan such checks.
 """
 
     def _find_executable(self) -> str:

@@ -184,7 +184,7 @@ class AppTester:
         
         elements = {}
         for app in found_apps:
-            if app.name and ('python' in app.name.lower() or 'app' in app.name.lower()):
+            if app.name and ('python' in app.name.lower() or 'app' in app.name.lower() or 'window' in app.name.lower()):
                  self._traverse_tree(app, elements)
         
         return elements
@@ -198,7 +198,7 @@ class AppTester:
                 'push button', 'text', 'check box', 'radio button', 
                 'menu item', 'page tab', 'combo box', 'list item', 
                 'entry', 'spin button', 'slider', 'table cell', 'link',
-                'password text'
+                'password text', 'toggle button', 'list'
             ]
 
             try:
@@ -215,17 +215,23 @@ class AppTester:
             except:
                 is_showing = True  # fallback
 
-            if role in interactive_roles and w > 0 and h > 0 and x >= 0 and y >= 0 and is_showing:
-                base_name = name if name else role
-                widget_name = base_name
+            if (role in interactive_roles or name) and w > 0 and h > 0 and x >= 0 and y >= 0 and is_showing:
+                base_name = name.replace('\n', ' ') if name else role
+                widget_name = base_name.strip()
+                if not widget_name:
+                    widget_name = role
+
                 count = 1
-                while widget_name in elements:
-                    widget_name = f"{base_name}_{count}"
+                unique_name = widget_name
+                while unique_name in elements:
+                    unique_name = f"{widget_name}_{count}"
                     count += 1
-                elements[widget_name] = (x, y, w, h)
+                elements[unique_name] = (x, y, w, h)
 
             for i in range(obj.childCount):
-                self._traverse_tree(obj.getChildAtIndex(i), elements)
+                child = obj.getChildAtIndex(i)
+                if child:
+                    self._traverse_tree(child, elements)
                 
         except Exception:
             pass

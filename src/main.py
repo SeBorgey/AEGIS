@@ -2,11 +2,11 @@ import os
 import json
 from pathlib import Path
 
-from llm_client import LLMClient
-from react_agent import ReActAgent
-from manager_agent import ManagerAgent
-from code_executor import CodeExecutor
-from log_manager import LogManager
+from core.llm_client import LLMClient
+from agents.coder_agent import ReActAgent
+from agents.manager_agent import ManagerAgent
+from core.code_executor import CodeExecutor
+from core.log_manager import LogManager
 from action_api import ActionPolicy, PolicyConfig, ActionExecutor, build_registry, build_manager_registry
 
 
@@ -69,7 +69,7 @@ def run_task(task_description: str, workspace: str, log_manager: LogManager) -> 
 
 
 def main():
-    # dataset_path = Path("datasets/middle.json")
+    # dataset_path = Path("datasets/hard.json")
     dataset_path = Path("non_existent_file.json")
 
     if dataset_path.exists():
@@ -85,7 +85,7 @@ def main():
             run_task(task, str(lm.code_dir), lm)
     else:
         lm = LogManager(base_dir="runs", retention_days=7)
-        task = "Write me a calculator - a calculator-like version for Windows - with engineer and programmer modes, history, support for brackets and advanced mathematical operations."
+        task = "Create program: GeoText text analyzer extracting and mapping cities and countries from loaded document"
         lm.save_metadata({"original_task": task})
         run_task(task, str(lm.code_dir), lm)
 

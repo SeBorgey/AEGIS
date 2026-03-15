@@ -23,10 +23,10 @@ AEGIS — автономная мультиагентная система, ко
 Пользователь (ТЗ)
         │
         ▼
-  ManagerAgent (планировщик)
-        │
-        ├── создаёт RPD и чеклист
-        ├── вызывает run_coder → CoderAgent
+   ManagerAgent (планировщик)
+         │
+         ├── создаёт RPD и чеклист
+         ├── вызывает run_coder → CoderAgent
         ├── ревьюит код (open_file, get_all_symbols)
         ├── отправляет фидбэк кодеру
         └── вызывает finish_work → PyInstaller → exe
@@ -42,7 +42,7 @@ AEGIS — автономная мультиагентная система, ко
 
 ### Агенты
 
-#### ManagerAgent (`manager_agent.py`)
+#### ManagerAgent (`src/agents/manager_agent.py`)
 - **Роль**: Менеджер проекта. Получает ТЗ, создаёт RPD, управляет кодером.
 - **Паттерн**: ReAct (Thought → Action → Observation).
 - **Формат ответов LLM**: JSON в блоке ` ```json `.
@@ -50,7 +50,7 @@ AEGIS — автономная мультиагентная система, ко
 - **Лимит итераций**: 300 (по умолчанию в `main.py`).
 - **Процесс**: анализ запроса → RPD → чеклист → вызов кодера → ревью кода → фикс → `finish_work` (сборка PyInstaller).
 
-#### CoderAgent (ReActAgent) (`react_agent.py`)
+#### CoderAgent (ReActAgent) (`src/agents/coder_agent.py`)
 - **Роль**: Программист. Пишет код Python/PySide6.
 - **Паттерн**: ReAct.
 - **Доступные экшены**: `read_file`, `create_file`, `edit_file`, `get_file_tree`, `run_command`, `run_ipython`, `finish_task`.
@@ -58,7 +58,7 @@ AEGIS — автономная мультиагентная система, ко
 - **Главный файл**: всегда `app.py`.
 - **Тестирование**: при `finish_task` запускается `app.py` через `CodeExecutor.test_app()` — если приложение работает 3 секунды без крашей, тест пройден. Если нет — ошибка передаётся обратно, кодер исправляет.
 
-#### JudgeAgent (`judge_agent.py`)
+#### JudgeAgent (`src/agents/judge_agent.py`)
 - **Роль**: QA-тестировщик. Запускает собранный exe, взаимодействует с GUI, оценивает.
 - **Паттерн**: ReAct (мультимодальный — получает скриншоты).
 - **Доступные экшены**: `start`, `click`, `type_text`, `run_command`, `finish`.
@@ -72,8 +72,8 @@ AEGIS — автономная мультиагентная система, ко
 
 | Файл | Назначение |
 |---|---|
-| `main.py` | CLI-точка входа. Читает задачи из JSON-датасета или использует хардкод-задачу. Собирает пайплайн: LLMClient → Coder → Manager → запуск. |
-| `run_judge.py` | Запуск JudgeAgent для всех ранов в `runs/`, у которых есть `code/dist/app`. |
+| `src/main.py` | CLI-точка входа. Читает задачи из JSON-датасета или использует хардкод-задачу. Собирает пайплайн: LLMClient → Coder → Manager → запуск. |
+| `src/run_judge.py` | Запуск JudgeAgent для всех ранов в `runs/`, у которых есть `code/dist/app`. |
 | `web_interface/server.py` | FastAPI-сервер (порт 8000). Принимает ТЗ через POST `/api/start`, запускает генерацию в фоне, отдаёт статус/логи/скачивание. |
 
 ### Shell-скрипты (все устанавливают `OPENAI_API_KEY`)
@@ -82,21 +82,21 @@ AEGIS — автономная мультиагентная система, ко
 |---|---|
 | `run.sh` | `python -u main.py 2>&1 \| tee output.log` |
 | `judge.sh` | `python -u run_judge.py 2>&1 \| tee output.log` |
-| `web_interface.sh` | `python web_interface/server.py` |
+| `web_interface.sh` | `python src/web_interface/server.py` |
 
 ### Ядро системы
 
 | Файл | Класс/Функция | Назначение |
 |---|---|---|
-| `llm_client.py` | `LLMClient` | Обёртка над OpenAI SDK. base_url = Gemini API. Модель: `gemini-3-flash-preview`. Retry 3 раза при пустом ответе или API-ошибке. |
-| `react_agent.py` | `ReActAgent` | Базовый ReAct-агент (используется как Coder). Цикл: prompt → LLM → parse JSON → execute action → observation. |
-| `manager_agent.py` | `ManagerAgent` | Менеджер-агент. Похожий цикл, но с другим набором экшенов. |
-| `judge_agent.py` | `JudgeAgent` | Судья-агент. Мультимодальный (скриншоты в base64). |
-| `code_executor.py` | `CodeExecutor` | `test_app()` — запуск `app.py` в offscreen-режиме Qt, проверка 3 сек. `package_to_exe()` — PyInstaller. |
-| `app_tester.py` | `AppTester` | GUI-тестер для судьи. Запускает exe в виртуальном дисплее (Xvfb + fluxbox). Скриншоты через pyautogui. Клики по виджетам через AT-SPI (pyatspi). |
-| `log_manager.py` | `LogManager` | Управление логами. Создаёт директорию рана `runs/run_{timestamp}_{pid}/`. Подкаталоги: `logs/` (program.log, chat.md, metadata.json) и `code/` (рабочая директория кодера). Авто-очистка старых ранов. |
+| `src/core/llm_client.py` | `LLMClient` | Обёртка над OpenAI SDK. base_url = Gemini API. Модель: `gemini-3-flash-preview`. Retry 3 раза при пустом ответе или API-ошибке. |
+| `src/agents/coder_agent.py` | `ReActAgent` | Базовый ReAct-агент (используется как Coder). Цикл: prompt → LLM → parse JSON → execute action → observation. |
+| `src/agents/manager_agent.py` | `ManagerAgent` | Менеджер-агент. Похожий цикл, но с другим набором экшенов. |
+| `src/agents/judge_agent.py` | `JudgeAgent` | Судья-агент. Мультимодальный (скриншоты в base64). |
+| `src/core/code_executor.py` | `CodeExecutor` | `test_app()` — запуск `app.py` в offscreen-режиме Qt, проверка 3 сек. `package_to_exe()` — PyInstaller. |
+| `src/core/app_tester.py` | `AppTester` | GUI-тестер для судьи. Запускает exe в виртуальном дисплее (Xvfb + fluxbox). Скриншоты через pyautogui. Клики по виджетам через AT-SPI (pyatspi). |
+| `src/core/log_manager.py` | `LogManager` | Управление логами. Создаёт директорию рана `runs/run_{timestamp}_{pid}/`. Подкаталоги: `logs/` (program.log, chat.md, metadata.json) и `code/` (рабочая директория кодера). Авто-очистка старых ранов. |
 
-### Пакет `action_api/`
+### Пакет `src/action_api/`
 
 Инфраструктура экшенов для агентов.
 
