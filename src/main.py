@@ -85,7 +85,7 @@ def main():
             run_task(task, str(lm.code_dir), lm)
     else:
         lm = LogManager(base_dir="runs", retention_days=7)
-        task = "Create program: GeoText text analyzer extracting and mapping cities and countries from loaded document"
+        task = "text editor"
         lm.save_metadata({"original_task": task})
         run_task(task, str(lm.code_dir), lm)
 

@@ -53,7 +53,7 @@ Important:
 - Do not add keybinds - there must be a graphic widget on every action.
 - When finished, call finish_task - the application will be tested automatically
 - If the test fails - you will receive an error and can fix it
-- Install libraries (pip install) only if you receive an error about their absence
+- Install libraries (uv pip install) only if you receive an error about their absence
 - Do not install libraries preventively
 - DO NOT use `try...except ImportError` for external libraries. Import them normally so that the test catches missing dependencies and you can install them.
 - Do not use placeholders TODO and others, write all the code at once.
