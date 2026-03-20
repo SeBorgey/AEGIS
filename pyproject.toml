@@ -24,6 +24,7 @@ dependencies = [
     "httpx>=0.28.1",
     "pygobject>=3.56.1",
     "pillow>=10.0.0",
+    "tool-suggest[autointent,local]",
 ]
 
 
@@ -33,4 +34,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
+
+[tool.uv.sources]
+tool-suggest = { path = "../DeepPavlov/tool-suggest" }
 

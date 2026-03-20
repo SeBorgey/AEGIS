@@ -17,6 +17,9 @@ class ReActAgent:
         log_manager: LogManager,
         max_iterations: int = 30,
         agent_name: str = "coder",
+        dataset_collector=None,
+        tool_suggest_client=None,
+        top_k: int = 3,
     ):
         self.llm = llm_client
         self.executor = executor
@@ -25,18 +28,24 @@ class ReActAgent:
         self.max_iterations = max_iterations
         self.agent_name = agent_name
         self.messages = []
+        self.dataset_collector = dataset_collector
+        self.tool_suggest_client = tool_suggest_client
+        self.top_k = top_k
+        self.step_count = 0
 
-    def _build_system_prompt(self) -> str:
-        return """You are an autonomous programmer agent. You create Python programs with GUI (PySide6).
-
-Available actions:
-- read_file: {"path": "file.py"}
+    def _build_system_prompt(self, tools_section: str | None = None) -> str:
+        if tools_section is None:
+            tools_section = """- read_file: {"path": "file.py"}
 - create_file: {"path": "file.py", "content": "code"}
 - edit_file: {"path": "file.py", "old": "old text", "new": "new text"}
 - get_file_tree: {"start_path": ".", "max_depth": 2} - show file structure
 - run_command: {"cmd": ["command", "args"]} - any terminal command
 - run_ipython: {"code": "print('hello')"} - execute python code in interactive environment (state is preserved)
-- finish_task: {} - finish task execution and run tests
+- finish_task: {} - finish task execution and run tests"""
+        return f"""You are an autonomous programmer agent. You create Python programs with GUI (PySide6).
+
+Available actions:
+{tools_section}
 
 
 
@@ -60,11 +69,21 @@ Important:
 - ALWAYS set accessibleName for buttons or interactive widgets that do not contain visible text (e.g., icon-only buttons) so the automated tester can find and click them.
 - DO NOT write placeholders for API keys in the code (e.g. `API_KEY = "your_key_here"`). If your application requires an API key, the GUI MUST ask the user to input it (e.g. via an input dialog or text field)."""
 
+    def _get_tools_section(self) -> str | None:
+        if self.tool_suggest_client is None:
+            return None
+        from tool_suggest_experiment.tool_filter import get_suggested_tools_section, CODER_TOOLS
+        return get_suggested_tools_section(
+            self.tool_suggest_client, self.messages, CODER_TOOLS, self.top_k
+        )
+
     def run(self, task: str) -> bool:
         self.log.start_chat(self.agent_name)
+        self.step_count = 0
 
         if not self.messages:
-            system_prompt = self._build_system_prompt()
+            tools_section = self._get_tools_section()
+            system_prompt = self._build_system_prompt(tools_section)
             self.messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Task: {task}"},
@@ -77,6 +96,12 @@ Important:
 
         for iteration in range(self.max_iterations):
             self.log.info(f"Iteration {iteration + 1}/{self.max_iterations}")
+            self.step_count += 1
+
+            if self.tool_suggest_client and iteration > 0:
+                tools_section = self._get_tools_section()
+                if tools_section:
+                    self.messages[0]["content"] = self._build_system_prompt(tools_section)
 
             response = self.llm.chat(self.messages, response_model=AgentResponse)
             if not response:
@@ -102,6 +127,12 @@ Important:
 
             self.log.info(f"Thought: {thought}")
             self.log.info(f"Action: {action_name}({params})")
+
+            if self.dataset_collector and action_name:
+                try:
+                    self.dataset_collector.record_step(self.messages, action_name)
+                except Exception as e:
+                    self.log.warning(f"Failed to record step for tool-suggest: {e}")
 
             if action_name == "finish_task":
                 self.log.info("Agent says finish_task, testing app...")

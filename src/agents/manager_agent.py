@@ -14,6 +14,9 @@ class ManagerAgent:
         executor: ActionExecutor,
         log_manager: LogManager,
         max_iterations: int = 50,
+        dataset_collector=None,
+        tool_suggest_client=None,
+        top_k: int = 3,
     ):
         self.llm = llm_client
         self.executor = executor
@@ -21,9 +24,20 @@ class ManagerAgent:
         self.max_iterations = max_iterations
         self.messages = []
         self.agent_name = "manager"
+        self.dataset_collector = dataset_collector
+        self.tool_suggest_client = tool_suggest_client
+        self.top_k = top_k
+        self.step_count = 0
 
-    def _build_system_prompt(self) -> str:
-        return """You are a Project Manager Agent. Your goal is to oversee the development of a software project.
+    def _build_system_prompt(self, tools_section: str | None = None) -> str:
+        if tools_section is None:
+            tools_section = """- run_coder: {"instruction": "text"} - Send instructions to the Coder Agent. First call should include the RPD. Subsequent calls should include feedback or new tasks.
+- finish_work: {} - Call this ONLY when the project is fully completed and verified. This will trigger the final build.
+- get_project_tree: {} - Get the file structure of the project.
+- get_all_symbols: {"file_path": "path/to/file.py"} - Get a list of classes and functions in a file with line numbers.
+- open_file: {"file_path": "path/to/file.py", "start_line": 1, "end_line": 100} - Read file content. Parameters start_line and end_line are optional - use them to read only specific lines (e.g., start_line: 10, end_line: 50). If omitted, reads entire file.
+- terminal_command: {"cmd": ["command", "args"]} - Run a terminal command (use sparingly, e.g., for grep)."""
+        return f"""You are a Project Manager Agent. Your goal is to oversee the development of a software project.
 This project must be a Python program with GUI (PySide6).
 You manage a Coder Agent who writes the code. For installing libraries `uv pip install`.
 
@@ -37,12 +51,7 @@ Process:
 8. Finish the work.
 
 Available Tools:
-- run_coder: {"instruction": "text"} - Send instructions to the Coder Agent. First call should include the RPD. Subsequent calls should include feedback or new tasks.
-- finish_work: {} - Call this ONLY when the project is fully completed and verified. This will trigger the final build.
-- get_project_tree: {} - Get the file structure of the project.
-- get_all_symbols: {"file_path": "path/to/file.py"} - Get a list of classes and functions in a file with line numbers. 
-- open_file: {"file_path": "path/to/file.py", "start_line": 1, "end_line": 100} - Read file content. Parameters start_line and end_line are optional - use them to read only specific lines (e.g., start_line: 10, end_line: 50). If omitted, reads entire file.
-- terminal_command: {"cmd": ["command", "args"]} - Run a terminal command (use sparingly, e.g., for grep).
+{tools_section}
 
 Important:
 - Don't divide a project into phases. The project should be developed from the first call to the Coder. Your goal is to check if they forgot anything.
@@ -51,15 +60,25 @@ Important:
 - requirements.txt do not needed.
 """
 
+    def _get_tools_section(self) -> str | None:
+        if self.tool_suggest_client is None:
+            return None
+        from tool_suggest_experiment.tool_filter import get_suggested_tools_section, MANAGER_TOOLS
+        return get_suggested_tools_section(
+            self.tool_suggest_client, self.messages, MANAGER_TOOLS, self.top_k
+        )
+
     def run(self, user_request: str) -> bool:
         self.log.start_chat(self.agent_name)
-        
-        system_prompt = self._build_system_prompt()
+        self.step_count = 0
+
+        tools_section = self._get_tools_section()
+        system_prompt = self._build_system_prompt(tools_section)
         self.messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"User Request: {user_request}"},
         ]
-        
+
         self.log.append_chat("system", system_prompt, self.agent_name)
         self.log.append_chat("user", user_request, self.agent_name)
 
@@ -67,6 +86,12 @@ Important:
 
         for iteration in range(self.max_iterations):
             self.log.info(f"Manager Iteration {iteration + 1}/{self.max_iterations}")
+            self.step_count += 1
+
+            if self.tool_suggest_client and iteration > 0:
+                tools_section = self._get_tools_section()
+                if tools_section:
+                    self.messages[0]["content"] = self._build_system_prompt(tools_section)
             
             response = self.llm.chat(self.messages, response_model=AgentResponse)
             if not response:
@@ -85,6 +110,12 @@ Important:
 
             self.log.info(f"Manager Thought: {thought}")
             self.log.info(f"Manager Action: {action_name}({params})")
+
+            if self.dataset_collector and action_name:
+                try:
+                    self.dataset_collector.record_step(self.messages, action_name)
+                except Exception as e:
+                    self.log.warning(f"Failed to record step for tool-suggest: {e}")
 
             call = ActionCall(name=action_name, params=params)
             result = self.executor.execute(call)
