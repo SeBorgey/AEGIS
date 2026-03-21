@@ -31,19 +31,28 @@ def test_baseline_single_task():
         assert 0 <= score <= 10
 
 
-def test_baseline_csv_output():
-    from tool_suggest_experiment.experiment_runner import run_baseline
+def test_full_experiment():
+    from tool_suggest_experiment.experiment_runner import run_full_experiment
 
     api_key = os.environ["OPENAI_API_KEY"]
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        output = os.path.join(tmpdir, "test_baseline.csv")
-        run_baseline(["text editor"], api_key, output, num_runs=1)
+        baseline_csv = os.path.join(tmpdir, "baseline.csv")
+        toolsuggest_csv = os.path.join(tmpdir, "toolsuggest.csv")
+        run_full_experiment(
+            ["calculator"], api_key,
+            baseline_csv=baseline_csv,
+            toolsuggest_csv=toolsuggest_csv,
+            num_runs=1,
+        )
 
-        assert Path(output).exists()
+        assert Path(baseline_csv).exists()
+        assert Path(toolsuggest_csv).exists()
+
         import csv
-        with open(output, "r") as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-        assert len(rows) >= 2
-        assert len(rows[0]) == len(rows[1])
+        for csv_path in [baseline_csv, toolsuggest_csv]:
+            with open(csv_path, "r") as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+            assert len(rows) >= 2
+            assert len(rows[0]) == len(rows[1])

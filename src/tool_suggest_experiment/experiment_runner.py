@@ -179,21 +179,29 @@ def run_baseline(tasks: list[str], api_key: str, output_csv: str, num_runs: int 
     print(f"\nResults saved to {output_csv}")
 
 
-def run_with_toolsuggest(tasks: list[str], api_key: str, output_csv: str, top_k: int = DEFAULT_TOP_K, num_runs: int = NUM_RUNS):
+def run_full_experiment(
+    tasks: list[str],
+    api_key: str,
+    baseline_csv: str,
+    toolsuggest_csv: str,
+    top_k: int = DEFAULT_TOP_K,
+    num_runs: int = NUM_RUNS,
+):
     from tool_suggest.client import ToolSuggestClient, ToolSuggestConfig, LocalBackendConfig
     from tool_suggest.services.formatter import SampleFormatter
     from tool_suggest.services.suggester.autointent import AutoIntentSuggester
     from tool_suggest.services.repository import InMemoryRepository
     from tool_suggest_experiment.dataset_collector import AegisDatasetCollector
-    from tool_suggest_experiment.tool_filter import CODER_TOOLS, MANAGER_TOOLS
 
-    print(f"=== Tool-suggest mode: {len(tasks)} tasks, {num_runs} runs each, top_k={top_k} ===")
-    all_results = []
+    print(f"=== Full experiment: {len(tasks)} tasks, {num_runs} runs each, top_k={top_k} ===")
+    baseline_results = []
+    toolsuggest_results = []
 
     for task in tasks:
-        print(f"\n--- Task: {task} ---")
+        print(f"\n{'='*60}")
+        print(f"Task: {task}")
+        print(f"{'='*60}")
 
-        print("  Phase 1: Collecting data (baseline runs)...")
         formatter_coder = SampleFormatter(max_len=FORMATTER_MAX_LEN, token_counter=len)
         formatter_manager = SampleFormatter(max_len=FORMATTER_MAX_LEN, token_counter=len)
 
@@ -215,15 +223,29 @@ def run_with_toolsuggest(tasks: list[str], api_key: str, output_csv: str, top_k:
         collector_coder = AegisDatasetCollector(client_coder)
         collector_manager = AegisDatasetCollector(client_manager)
 
-        for collect_idx in range(num_runs):
-            print(f"  Collection run {collect_idx + 1}/{num_runs}...")
-            run_single_task(
+        print(f"\n--- Phase 1: Baseline ({num_runs} runs + dataset collection) ---")
+        baseline_runs = []
+        for run_idx in range(num_runs):
+            print(f"  Baseline run {run_idx + 1}/{num_runs}...")
+            metrics, lm = run_single_task(
                 task, api_key,
                 dataset_collector_coder=collector_coder,
                 dataset_collector_manager=collector_manager,
             )
 
-        print("  Phase 2: Training tool-suggest...")
+            if metrics.success:
+                scores = run_judge_multiple(str(lm.run_dir), api_key)
+                metrics.judge_scores = scores
+                print(f"    Score: {metrics.avg_judge_score:.2f}, Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
+            else:
+                metrics.judge_scores = [0.0] * NUM_JUDGE_RUNS
+                print(f"    FAILED. Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
+
+            baseline_runs.append(metrics)
+
+        baseline_results.append((task, baseline_runs))
+
+        print(f"\n--- Phase 2: Training tool-suggest ---")
         try:
             asyncio.run(client_coder.train())
             print("    Coder tool-suggest trained.")
@@ -238,10 +260,10 @@ def run_with_toolsuggest(tasks: list[str], api_key: str, output_csv: str, top_k:
             print(f"    Manager training failed: {e}")
             client_manager = None
 
-        print("  Phase 3: Running with tool-suggest...")
-        runs = []
+        print(f"\n--- Phase 3: Tool-suggest runs ({num_runs} runs) ---")
+        ts_runs = []
         for run_idx in range(num_runs):
-            print(f"  Run {run_idx + 1}/{num_runs} with tool-suggest...")
+            print(f"  Tool-suggest run {run_idx + 1}/{num_runs}...")
             metrics, lm = run_single_task(
                 task, api_key,
                 tool_suggest_client_coder=client_coder,
@@ -257,18 +279,23 @@ def run_with_toolsuggest(tasks: list[str], api_key: str, output_csv: str, top_k:
                 metrics.judge_scores = [0.0] * NUM_JUDGE_RUNS
                 print(f"    FAILED. Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
 
-            runs.append(metrics)
+            ts_runs.append(metrics)
 
-        all_results.append((task, runs))
+        toolsuggest_results.append((task, ts_runs))
 
-    write_results(output_csv, all_results)
-    print(f"\nResults saved to {output_csv}")
+    write_results(baseline_csv, baseline_results)
+    print(f"\nBaseline results saved to {baseline_csv}")
+
+    write_results(toolsuggest_csv, toolsuggest_results)
+    print(f"Tool-suggest results saved to {toolsuggest_csv}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="AEGIS + tool-suggest experiment runner")
-    parser.add_argument("--mode", choices=["baseline", "toolsuggest"], required=True)
+    parser.add_argument("--mode", choices=["baseline", "full"], required=True)
     parser.add_argument("--output", type=str, default=None)
+    parser.add_argument("--output_baseline", type=str, default="baseline_results.csv")
+    parser.add_argument("--output_toolsuggest", type=str, default="toolsuggest_results.csv")
     parser.add_argument("--top_k", type=int, default=DEFAULT_TOP_K)
     parser.add_argument("--tasks", type=str, nargs="*", default=None,
                         help="Specific tasks to run (overrides datasets)")
@@ -293,12 +320,17 @@ def main():
         print("No tasks found")
         return
 
-    output = args.output or f"{args.mode}_results.csv"
-
     if args.mode == "baseline":
+        output = args.output or "baseline_results.csv"
         run_baseline(tasks, api_key, output, num_runs=args.num_runs)
     else:
-        run_with_toolsuggest(tasks, api_key, output, top_k=args.top_k, num_runs=args.num_runs)
+        run_full_experiment(
+            tasks, api_key,
+            baseline_csv=args.output_baseline,
+            toolsuggest_csv=args.output_toolsuggest,
+            top_k=args.top_k,
+            num_runs=args.num_runs,
+        )
 
 
 if __name__ == "__main__":
