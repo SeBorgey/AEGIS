@@ -3,22 +3,36 @@ from pathlib import Path
 from tool_suggest_experiment.metrics import RunMetrics
 
 
-HEADERS = [
-    "task",
-    "run1_score", "run2_score", "run3_score", "avg_score",
-    "run1_tokens", "run2_tokens", "run3_tokens", "avg_tokens",
-    "run1_steps", "run2_steps", "run3_steps", "avg_steps",
-    "run1_time", "run2_time", "run3_time", "avg_time",
-]
+def _build_headers(num_runs: int) -> list[str]:
+    headers = ["task"]
+    for i in range(1, num_runs + 1):
+        headers.append(f"run{i}_score")
+    headers.append("avg_score")
+    for i in range(1, num_runs + 1):
+        headers.append(f"run{i}_tokens")
+    headers.append("avg_tokens")
+    for i in range(1, num_runs + 1):
+        headers.append(f"run{i}_steps")
+    headers.append("avg_steps")
+    for i in range(1, num_runs + 1):
+        headers.append(f"run{i}_time")
+    headers.append("avg_time")
+    return headers
 
 
 def write_results(output_path: str | Path, task_results: list[tuple[str, list[RunMetrics]]]):
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    if not task_results:
+        return
+
+    num_runs = len(task_results[0][1])
+    headers = _build_headers(num_runs)
+
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(HEADERS)
+        writer.writerow(headers)
 
         for task_name, runs in task_results:
             row = [task_name]

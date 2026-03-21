@@ -63,14 +63,14 @@ Important:
     def _get_tools_section(self) -> str | None:
         if self.tool_suggest_client is None:
             return None
-        from tool_suggest_experiment.tool_filter import get_suggested_tools_section, MANAGER_TOOLS
+        from tool_suggest_experiment.tool_filter import get_suggested_tools_section, MANAGER_TOOLS, MANAGER_TERMINAL_TOOLS
         return get_suggested_tools_section(
-            self.tool_suggest_client, self.messages, MANAGER_TOOLS, self.top_k
+            self.tool_suggest_client, self.messages, MANAGER_TOOLS, self.top_k,
+            terminal_tools=MANAGER_TERMINAL_TOOLS,
         )
 
     def run(self, user_request: str) -> bool:
         self.log.start_chat(self.agent_name)
-        self.step_count = 0
 
         tools_section = self._get_tools_section()
         system_prompt = self._build_system_prompt(tools_section)

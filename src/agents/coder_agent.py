@@ -72,14 +72,14 @@ Important:
     def _get_tools_section(self) -> str | None:
         if self.tool_suggest_client is None:
             return None
-        from tool_suggest_experiment.tool_filter import get_suggested_tools_section, CODER_TOOLS
+        from tool_suggest_experiment.tool_filter import get_suggested_tools_section, CODER_TOOLS, CODER_TERMINAL_TOOLS
         return get_suggested_tools_section(
-            self.tool_suggest_client, self.messages, CODER_TOOLS, self.top_k
+            self.tool_suggest_client, self.messages, CODER_TOOLS, self.top_k,
+            terminal_tools=CODER_TERMINAL_TOOLS,
         )
 
     def run(self, task: str) -> bool:
         self.log.start_chat(self.agent_name)
-        self.step_count = 0
 
         if not self.messages:
             tools_section = self._get_tools_section()

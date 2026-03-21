@@ -20,7 +20,7 @@ def test_baseline_single_task():
 
     api_key = os.environ["OPENAI_API_KEY"]
 
-    metrics, lm = run_single_task("text editor", api_key, num_runs=1)
+    metrics, lm = run_single_task("text editor", api_key)
 
     assert metrics.total_tokens > 0
     assert metrics.steps > 0
@@ -46,3 +46,4 @@ def test_baseline_csv_output():
             reader = csv.reader(f)
             rows = list(reader)
         assert len(rows) >= 2
+        assert len(rows[0]) == len(rows[1])

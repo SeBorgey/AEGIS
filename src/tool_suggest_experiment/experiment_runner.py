@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import asyncio
 import argparse
 from pathlib import Path
 
@@ -41,7 +42,7 @@ def run_single_task(
     tool_suggest_client_coder=None,
     tool_suggest_client_manager=None,
     top_k: int = DEFAULT_TOP_K,
-) -> RunMetrics:
+) -> tuple[RunMetrics, LogManager]:
     lm = LogManager(base_dir=base_dir, retention_days=7)
     workspace_path = lm.code_dir
 
@@ -126,16 +127,17 @@ def run_judge_single(run_path: str, api_key: str) -> float:
 
     agent.run()
 
+    run_name = Path(run_path).name
     csv_path = Path("runs") / "judge_results.csv"
     if csv_path.exists():
         import csv
         with open(csv_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
-        if rows:
-            last = rows[-1]
+        matching = [r for r in rows if r.get("run") == run_name]
+        if matching:
             try:
-                return float(last.get("score", 0))
+                return float(matching[-1].get("score", 0))
             except (ValueError, TypeError):
                 return 0.0
     return 0.0
@@ -178,9 +180,10 @@ def run_baseline(tasks: list[str], api_key: str, output_csv: str, num_runs: int 
 
 
 def run_with_toolsuggest(tasks: list[str], api_key: str, output_csv: str, top_k: int = DEFAULT_TOP_K, num_runs: int = NUM_RUNS):
-    from tool_suggest.client import ToolSuggestClient
+    from tool_suggest.client import ToolSuggestClient, ToolSuggestConfig, LocalBackendConfig
     from tool_suggest.services.formatter import SampleFormatter
     from tool_suggest.services.suggester.autointent import AutoIntentSuggester
+    from tool_suggest.services.repository import InMemoryRepository
     from tool_suggest_experiment.dataset_collector import AegisDatasetCollector
     from tool_suggest_experiment.tool_filter import CODER_TOOLS, MANAGER_TOOLS
 
@@ -194,14 +197,20 @@ def run_with_toolsuggest(tasks: list[str], api_key: str, output_csv: str, top_k:
         formatter_coder = SampleFormatter(max_len=FORMATTER_MAX_LEN, token_counter=len)
         formatter_manager = SampleFormatter(max_len=FORMATTER_MAX_LEN, token_counter=len)
 
-        client_coder = ToolSuggestClient(
-            suggester=AutoIntentSuggester(formatter_coder, config=AUTOINTENT_PRESET),
-            toolset=list(CODER_TOOLS.keys()),
-        )
-        client_manager = ToolSuggestClient(
-            suggester=AutoIntentSuggester(formatter_manager, config=AUTOINTENT_PRESET),
-            toolset=list(MANAGER_TOOLS.keys()),
-        )
+        client_coder = ToolSuggestClient(ToolSuggestConfig(
+            collection_name="coder_tools",
+            local_backend=LocalBackendConfig(
+                repository=InMemoryRepository("coder_tools"),
+                suggester=AutoIntentSuggester(formatter_coder, config=AUTOINTENT_PRESET),
+            ),
+        ))
+        client_manager = ToolSuggestClient(ToolSuggestConfig(
+            collection_name="manager_tools",
+            local_backend=LocalBackendConfig(
+                repository=InMemoryRepository("manager_tools"),
+                suggester=AutoIntentSuggester(formatter_manager, config=AUTOINTENT_PRESET),
+            ),
+        ))
 
         collector_coder = AegisDatasetCollector(client_coder)
         collector_manager = AegisDatasetCollector(client_manager)
@@ -216,16 +225,14 @@ def run_with_toolsuggest(tasks: list[str], api_key: str, output_csv: str, top_k:
 
         print("  Phase 2: Training tool-suggest...")
         try:
-            import asyncio
-            asyncio.get_event_loop().run_until_complete(client_coder.train())
+            asyncio.run(client_coder.train())
             print("    Coder tool-suggest trained.")
         except Exception as e:
             print(f"    Coder training failed: {e}")
             client_coder = None
 
         try:
-            import asyncio
-            asyncio.get_event_loop().run_until_complete(client_manager.train())
+            asyncio.run(client_manager.train())
             print("    Manager tool-suggest trained.")
         except Exception as e:
             print(f"    Manager training failed: {e}")

@@ -14,13 +14,16 @@ CODER_TOOLS = {
 }
 
 MANAGER_TOOLS = {
-    "run_coder": '{"instruction": "text"} - Send instructions to the Coder Agent.',
-    "finish_work": "{} - Call this ONLY when the project is fully completed and verified.",
+    "run_coder": '{"instruction": "text"} - Send instructions to the Coder Agent. First call should include the RPD. Subsequent calls should include feedback or new tasks.',
+    "finish_work": "{} - Call this ONLY when the project is fully completed and verified. This will trigger the final build.",
     "get_project_tree": "{} - Get the file structure of the project.",
     "get_all_symbols": '{"file_path": "path/to/file.py"} - Get a list of classes and functions in a file with line numbers.',
-    "open_file": '{"file_path": "path/to/file.py", "start_line": 1, "end_line": 100} - Read file content.',
-    "terminal_command": '{"cmd": ["command", "args"]} - Run a terminal command.',
+    "open_file": '{"file_path": "path/to/file.py", "start_line": 1, "end_line": 100} - Read file content. Parameters start_line and end_line are optional - use them to read only specific lines (e.g., start_line: 10, end_line: 50). If omitted, reads entire file.',
+    "terminal_command": '{"cmd": ["command", "args"]} - Run a terminal command (use sparingly, e.g., for grep).',
 }
+
+CODER_TERMINAL_TOOLS = {"finish_task"}
+MANAGER_TERMINAL_TOOLS = {"finish_work"}
 
 
 def get_suggested_tools_section(
@@ -28,15 +31,19 @@ def get_suggested_tools_section(
     messages: list[dict],
     all_tools: dict[str, str],
     top_k: int = 3,
+    terminal_tools: set[str] | None = None,
 ) -> str:
     if not client.is_trained:
         return _format_tools(all_tools)
 
     context = openai_messages_to_pydantic(messages)
-    suggestions = asyncio.get_event_loop().run_until_complete(
+    suggestions = asyncio.run(
         client.suggest(context, top_k=top_k)
     )
     suggested_names = {s.id for s in suggestions}
+
+    if terminal_tools:
+        suggested_names |= terminal_tools
 
     filtered = {k: v for k, v in all_tools.items() if k in suggested_names}
     if not filtered:

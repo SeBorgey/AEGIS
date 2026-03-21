@@ -1,4 +1,3 @@
-import pytest
 from pydantic_ai.messages import ModelRequest, ModelResponse, SystemPromptPart, UserPromptPart, TextPart
 
 from tool_suggest_experiment.message_converter import openai_messages_to_pydantic

@@ -9,7 +9,7 @@ class AegisDatasetCollector:
 
     def record_step(self, messages: list[dict], selected_tool: str):
         context = openai_messages_to_pydantic(messages)
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             self.client.record(context=context, selected_tools=[selected_tool])
         )
 
