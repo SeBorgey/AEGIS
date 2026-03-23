@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import random
 import asyncio
 import argparse
 from pathlib import Path
@@ -14,7 +15,7 @@ from core.log_manager import LogManager
 from action_api import ActionPolicy, PolicyConfig, ActionExecutor, build_registry, build_manager_registry
 
 from tool_suggest_experiment.metrics import RunMetrics
-from tool_suggest_experiment.csv_writer import write_results
+from tool_suggest_experiment.csv_writer import write_results, append_task_results, get_completed_tasks
 from tool_suggest_experiment.config import (
     EASY_DATASET, MIDDLE_DATASET, HARD_DATASET,
     NUM_RUNS, NUM_JUDGE_RUNS, DEFAULT_TOP_K,
@@ -33,7 +34,7 @@ def load_tasks(dataset_paths: list[Path]) -> list[str]:
     return tasks
 
 
-def run_single_task(
+def _run_single_task_impl(
     task_description: str,
     api_key: str,
     base_dir: str = "runs",
@@ -106,11 +107,26 @@ def run_single_task(
         duration_sec=duration,
         success=success,
     )
-
     return metrics, lm
 
 
-def run_judge_single(run_path: str, api_key: str) -> float:
+def run_single_task(
+    *args,
+    max_retries: int = 3,
+    **kwargs
+) -> tuple[RunMetrics, LogManager]:
+    for attempt in range(1, max_retries + 1):
+        try:
+            return _run_single_task_impl(*args, **kwargs)
+        except Exception as e:
+            print(f"    [!] Error running task on attempt {attempt}: {e}")
+            if attempt == max_retries:
+                task_desc = kwargs.get("task_description", args[0] if args else "Unknown")
+                return RunMetrics(task=task_desc, success=False, error_msg="ERROR"), None
+            time.sleep(2)
+
+
+def _run_judge_single_impl(run_path: str, api_key: str) -> float:
     lm = LogManager(
         base_dir="runs",
         logger_name=f"judge_{Path(run_path).name}",
@@ -139,11 +155,22 @@ def run_judge_single(run_path: str, api_key: str) -> float:
             try:
                 return float(matching[-1].get("score", 0))
             except (ValueError, TypeError):
-                return 0.0
-    return 0.0
+                raise ValueError("Invalid score format")
+    raise ValueError("Score not found in CSV")
 
 
-def run_judge_multiple(run_path: str, api_key: str, num_runs: int = NUM_JUDGE_RUNS) -> list[float]:
+def run_judge_single(run_path: str, api_key: str, max_retries: int = 3):
+    for attempt in range(1, max_retries + 1):
+        try:
+            return _run_judge_single_impl(run_path, api_key)
+        except Exception as e:
+            print(f"      [!] Error judging run on attempt {attempt}: {e}")
+            if attempt == max_retries:
+                return "ERROR"
+            time.sleep(2)
+
+
+def run_judge_multiple(run_path: str, api_key: str, num_runs: int = NUM_JUDGE_RUNS) -> list:
     scores = []
     for _ in range(num_runs):
         score = run_judge_single(run_path, api_key)
@@ -153,30 +180,32 @@ def run_judge_multiple(run_path: str, api_key: str, num_runs: int = NUM_JUDGE_RU
 
 def run_baseline(tasks: list[str], api_key: str, output_csv: str, num_runs: int = NUM_RUNS):
     print(f"=== Baseline mode: {len(tasks)} tasks, {num_runs} runs each ===")
-    all_results = []
-
+    
+    completed = get_completed_tasks(output_csv)
+    
     for task in tasks:
         print(f"\n--- Task: {task} ---")
+        if task in completed:
+            print(f"  Task already completed in CSV. Skipping.")
+            continue
+            
         runs = []
-
         for run_idx in range(num_runs):
             print(f"  Run {run_idx + 1}/{num_runs}...")
             metrics, lm = run_single_task(task, api_key)
 
-            if metrics.success:
+            if metrics.success and lm and not metrics.error_msg:
                 scores = run_judge_multiple(str(lm.run_dir), api_key)
                 metrics.judge_scores = scores
-                print(f"    Score: {metrics.avg_judge_score:.2f}, Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
+                print(f"    Score: {metrics.avg_judge_score}, Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
             else:
-                metrics.judge_scores = [0.0] * NUM_JUDGE_RUNS
+                metrics.judge_scores = ["ERROR"] * NUM_JUDGE_RUNS
                 print(f"    FAILED. Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
 
             runs.append(metrics)
 
-        all_results.append((task, runs))
-
-    write_results(output_csv, all_results)
-    print(f"\nResults saved to {output_csv}")
+        append_task_results(output_csv, task, runs, num_runs)
+        print(f"  Saved task results -> {output_csv}")
 
 
 def run_full_experiment(
@@ -193,77 +222,101 @@ def run_full_experiment(
     from tool_suggest.services.repository import InMemoryRepository
     from tool_suggest_experiment.dataset_collector import AegisDatasetCollector
 
-    print(f"=== Full experiment: {len(tasks)} tasks, {num_runs} runs each, top_k={top_k} ===")
-    baseline_results = []
-    toolsuggest_results = []
+    random.seed(42)
+    tasks_copy = tasks.copy()
+    random.shuffle(tasks_copy)
+    split_idx = max(1, int(len(tasks_copy) * 0.8))
+    train_tasks = tasks_copy[:split_idx] if len(tasks_copy) > 1 else tasks_copy
+    test_tasks = tasks_copy[split_idx:] if len(tasks_copy) > 1 else tasks_copy
 
-    for task in tasks:
-        print(f"\n{'='*60}")
-        print(f"Task: {task}")
-        print(f"{'='*60}")
+    print(f"=== Full experiment: {len(tasks)} total tasks ===")
+    print(f"Train tasks ({len(train_tasks)}): {train_tasks}")
+    print(f"Test tasks ({len(test_tasks)}): {test_tasks}")
+    
+    formatter_coder = SampleFormatter(max_len=FORMATTER_MAX_LEN, token_counter=len)
+    formatter_manager = SampleFormatter(max_len=FORMATTER_MAX_LEN, token_counter=len)
 
-        formatter_coder = SampleFormatter(max_len=FORMATTER_MAX_LEN, token_counter=len)
-        formatter_manager = SampleFormatter(max_len=FORMATTER_MAX_LEN, token_counter=len)
+    client_coder = ToolSuggestClient(ToolSuggestConfig(
+        collection_name="coder_tools",
+        local_backend=LocalBackendConfig(
+            repository=InMemoryRepository("coder_tools"),
+            suggester=AutoIntentSuggester(formatter_coder, config=AUTOINTENT_PRESET),
+        ),
+    ))
+    client_manager = ToolSuggestClient(ToolSuggestConfig(
+        collection_name="manager_tools",
+        local_backend=LocalBackendConfig(
+            repository=InMemoryRepository("manager_tools"),
+            suggester=AutoIntentSuggester(formatter_manager, config=AUTOINTENT_PRESET),
+        ),
+    ))
 
-        client_coder = ToolSuggestClient(ToolSuggestConfig(
-            collection_name="coder_tools",
-            local_backend=LocalBackendConfig(
-                repository=InMemoryRepository("coder_tools"),
-                suggester=AutoIntentSuggester(formatter_coder, config=AUTOINTENT_PRESET),
-            ),
-        ))
-        client_manager = ToolSuggestClient(ToolSuggestConfig(
-            collection_name="manager_tools",
-            local_backend=LocalBackendConfig(
-                repository=InMemoryRepository("manager_tools"),
-                suggester=AutoIntentSuggester(formatter_manager, config=AUTOINTENT_PRESET),
-            ),
-        ))
+    collector_coder = AegisDatasetCollector(client_coder)
+    collector_manager = AegisDatasetCollector(client_manager)
 
-        collector_coder = AegisDatasetCollector(client_coder)
-        collector_manager = AegisDatasetCollector(client_manager)
-
-        print(f"\n--- Phase 1: Baseline ({num_runs} runs + dataset collection) ---")
-        baseline_runs = []
+    print(f"\n--- Phase 1: Baseline Dataset Collection (Train Tasks) ---")
+    for task in train_tasks:
+        print(f"\nTask: {task} ({num_runs} runs)")
         for run_idx in range(num_runs):
-            print(f"  Baseline run {run_idx + 1}/{num_runs}...")
-            metrics, lm = run_single_task(
+            print(f"  Train run {run_idx + 1}/{num_runs}...")
+            run_single_task(
                 task, api_key,
                 dataset_collector_coder=collector_coder,
                 dataset_collector_manager=collector_manager,
             )
 
-            if metrics.success:
+    print(f"\n--- Phase 2: Training tool-suggest ---")
+    try:
+        asyncio.run(client_coder.train())
+        print("    Coder tool-suggest trained.")
+    except Exception as e:
+        print(f"    Coder training failed: {e}")
+        client_coder = None
+
+    try:
+        asyncio.run(client_manager.train())
+        print("    Manager tool-suggest trained.")
+    except Exception as e:
+        print(f"    Manager training failed: {e}")
+        client_manager = None
+
+    completed_baseline = get_completed_tasks(baseline_csv)
+    completed_ts = get_completed_tasks(toolsuggest_csv)
+
+    print(f"\n--- Phase 3: Baseline Test Phase ---")
+    for task in test_tasks:
+        if task in completed_baseline:
+            print(f"\n  Task '{task}' already completed in baseline. Skipping.")
+            continue
+            
+        print(f"\n  Baseline testing: {task}")
+        runs = []
+        for run_idx in range(num_runs):
+            print(f"    Test run {run_idx + 1}/{num_runs}...")
+            metrics, lm = run_single_task(task, api_key)
+
+            if metrics.success and lm and not metrics.error_msg:
                 scores = run_judge_multiple(str(lm.run_dir), api_key)
                 metrics.judge_scores = scores
-                print(f"    Score: {metrics.avg_judge_score:.2f}, Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
+                print(f"      Score: {metrics.avg_judge_score}, Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
             else:
-                metrics.judge_scores = [0.0] * NUM_JUDGE_RUNS
-                print(f"    FAILED. Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
+                metrics.judge_scores = ["ERROR"] * NUM_JUDGE_RUNS
+                print(f"      FAILED. Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
 
-            baseline_runs.append(metrics)
+            runs.append(metrics)
+        append_task_results(baseline_csv, task, runs, num_runs)
 
-        baseline_results.append((task, baseline_runs))
 
-        print(f"\n--- Phase 2: Training tool-suggest ---")
-        try:
-            asyncio.run(client_coder.train())
-            print("    Coder tool-suggest trained.")
-        except Exception as e:
-            print(f"    Coder training failed: {e}")
-            client_coder = None
-
-        try:
-            asyncio.run(client_manager.train())
-            print("    Manager tool-suggest trained.")
-        except Exception as e:
-            print(f"    Manager training failed: {e}")
-            client_manager = None
-
-        print(f"\n--- Phase 3: Tool-suggest runs ({num_runs} runs) ---")
-        ts_runs = []
+    print(f"\n--- Phase 4: Tool-Suggest Test Phase ---")
+    for task in test_tasks:
+        if task in completed_ts:
+            print(f"\n  Task '{task}' already completed in toolsuggest. Skipping.")
+            continue
+            
+        print(f"\n  Tool-suggest testing: {task}")
+        runs = []
         for run_idx in range(num_runs):
-            print(f"  Tool-suggest run {run_idx + 1}/{num_runs}...")
+            print(f"    TS run {run_idx + 1}/{num_runs}...")
             metrics, lm = run_single_task(
                 task, api_key,
                 tool_suggest_client_coder=client_coder,
@@ -271,23 +324,18 @@ def run_full_experiment(
                 top_k=top_k,
             )
 
-            if metrics.success:
+            if metrics.success and lm and not metrics.error_msg:
                 scores = run_judge_multiple(str(lm.run_dir), api_key)
                 metrics.judge_scores = scores
-                print(f"    Score: {metrics.avg_judge_score:.2f}, Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
+                print(f"      Score: {metrics.avg_judge_score}, Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
             else:
-                metrics.judge_scores = [0.0] * NUM_JUDGE_RUNS
-                print(f"    FAILED. Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
+                metrics.judge_scores = ["ERROR"] * NUM_JUDGE_RUNS
+                print(f"      FAILED. Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
 
-            ts_runs.append(metrics)
+            runs.append(metrics)
+        append_task_results(toolsuggest_csv, task, runs, num_runs)
 
-        toolsuggest_results.append((task, ts_runs))
-
-    write_results(baseline_csv, baseline_results)
-    print(f"\nBaseline results saved to {baseline_csv}")
-
-    write_results(toolsuggest_csv, toolsuggest_results)
-    print(f"Tool-suggest results saved to {toolsuggest_csv}")
+    print("\nExperiment finished.")
 
 
 def main():
