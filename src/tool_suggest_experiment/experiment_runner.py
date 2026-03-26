@@ -215,11 +215,15 @@ def run_full_experiment(
     toolsuggest_csv: str,
     top_k: int = DEFAULT_TOP_K,
     num_runs: int = NUM_RUNS,
+    skip_baseline: bool = False,
+    skip_train_collection: bool = False,
 ):
     from tool_suggest.client import ToolSuggestClient, ToolSuggestConfig, LocalBackendConfig
     from tool_suggest.services.formatter import SampleFormatter
     from tool_suggest.services.suggester.autointent import AutoIntentSuggester
-    from tool_suggest.services.repository import InMemoryRepository
+    from tool_suggest.services.repository import JSONFileRepository
+    from tool_suggest.services.selector import GreedySelector
+    from tool_suggest.services.embedder import SentenceTransformerEmbedder
     from tool_suggest_experiment.dataset_collector import AegisDatasetCollector
 
     random.seed(42)
@@ -235,35 +239,41 @@ def run_full_experiment(
     
     formatter_coder = SampleFormatter(max_len=FORMATTER_MAX_LEN, token_counter=len)
     formatter_manager = SampleFormatter(max_len=FORMATTER_MAX_LEN, token_counter=len)
+    embedder = SentenceTransformerEmbedder(device="cpu")
 
     client_coder = ToolSuggestClient(ToolSuggestConfig(
         collection_name="coder_tools",
         local_backend=LocalBackendConfig(
-            repository=InMemoryRepository("coder_tools"),
+            repository=JSONFileRepository("coder_repo.json", collection_name="coder_tools"),
             suggester=AutoIntentSuggester(formatter_coder, config=AUTOINTENT_PRESET),
+            selector=GreedySelector(formatter_coder, embedder, target_size=50),
         ),
     ))
     client_manager = ToolSuggestClient(ToolSuggestConfig(
         collection_name="manager_tools",
         local_backend=LocalBackendConfig(
-            repository=InMemoryRepository("manager_tools"),
+            repository=JSONFileRepository("manager_repo.json", collection_name="manager_tools"),
             suggester=AutoIntentSuggester(formatter_manager, config=AUTOINTENT_PRESET),
+            selector=GreedySelector(formatter_manager, embedder, target_size=50),
         ),
     ))
 
     collector_coder = AegisDatasetCollector(client_coder)
     collector_manager = AegisDatasetCollector(client_manager)
 
-    print(f"\n--- Phase 1: Baseline Dataset Collection (Train Tasks) ---")
-    for task in train_tasks:
-        print(f"\nTask: {task} ({num_runs} runs)")
-        for run_idx in range(num_runs):
-            print(f"  Train run {run_idx + 1}/{num_runs}...")
-            run_single_task(
-                task, api_key,
-                dataset_collector_coder=collector_coder,
-                dataset_collector_manager=collector_manager,
-            )
+    if not skip_train_collection:
+        print(f"\n--- Phase 1: Baseline Dataset Collection (Train Tasks) ---")
+        for task in train_tasks:
+            print(f"\nTask: {task} ({num_runs} runs)")
+            for run_idx in range(num_runs):
+                print(f"  Train run {run_idx + 1}/{num_runs}...")
+                run_single_task(
+                    task, api_key,
+                    dataset_collector_coder=collector_coder,
+                    dataset_collector_manager=collector_manager,
+                )
+    else:
+        print(f"\n--- Skipping Phase 1: Baseline Dataset Collection ---")
 
     print(f"\n--- Phase 2: Training tool-suggest ---")
     try:
@@ -283,28 +293,31 @@ def run_full_experiment(
     completed_baseline = get_completed_tasks(baseline_csv)
     completed_ts = get_completed_tasks(toolsuggest_csv)
 
-    print(f"\n--- Phase 3: Baseline Test Phase ---")
-    for task in test_tasks:
-        if task in completed_baseline:
-            print(f"\n  Task '{task}' already completed in baseline. Skipping.")
-            continue
-            
-        print(f"\n  Baseline testing: {task}")
-        runs = []
-        for run_idx in range(num_runs):
-            print(f"    Test run {run_idx + 1}/{num_runs}...")
-            metrics, lm = run_single_task(task, api_key)
+    if not skip_baseline:
+        print(f"\n--- Phase 3: Baseline Test Phase ---")
+        for task in test_tasks:
+            if task in completed_baseline:
+                print(f"\n  Task '{task}' already completed in baseline. Skipping.")
+                continue
+                
+            print(f"\n  Baseline testing: {task}")
+            runs = []
+            for run_idx in range(num_runs):
+                print(f"    Test run {run_idx + 1}/{num_runs}...")
+                metrics, lm = run_single_task(task, api_key)
 
-            if metrics.success and lm and not metrics.error_msg:
-                scores = run_judge_multiple(str(lm.run_dir), api_key)
-                metrics.judge_scores = scores
-                print(f"      Score: {metrics.avg_judge_score}, Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
-            else:
-                metrics.judge_scores = ["ERROR"] * NUM_JUDGE_RUNS
-                print(f"      FAILED. Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
+                if metrics.success and lm and not metrics.error_msg:
+                    scores = run_judge_multiple(str(lm.run_dir), api_key)
+                    metrics.judge_scores = scores
+                    print(f"      Score: {metrics.avg_judge_score}, Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
+                else:
+                    metrics.judge_scores = ["ERROR"] * NUM_JUDGE_RUNS
+                    print(f"      FAILED. Tokens: {metrics.total_tokens}, Steps: {metrics.steps}, Time: {metrics.duration_sec:.1f}s")
 
-            runs.append(metrics)
-        append_task_results(baseline_csv, task, runs, num_runs)
+                runs.append(metrics)
+            append_task_results(baseline_csv, task, runs, num_runs)
+    else:
+        print(f"\n--- Skipping Phase 3: Baseline Test Phase ---")
 
 
     print(f"\n--- Phase 4: Tool-Suggest Test Phase ---")
@@ -350,6 +363,10 @@ def main():
     parser.add_argument("--datasets", type=str, nargs="*", default=["easy", "middle", "hard"],
                         help="Datasets to use: easy, middle, hard")
     parser.add_argument("--num_runs", type=int, default=NUM_RUNS)
+    parser.add_argument("--skip_baseline", action="store_true",
+                        help="Skip baseline test phase in full experiment")
+    parser.add_argument("--skip_train_collection", action="store_true",
+                        help="Skip train collection phase in full experiment")
     args = parser.parse_args()
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -378,6 +395,8 @@ def main():
             toolsuggest_csv=args.output_toolsuggest,
             top_k=args.top_k,
             num_runs=args.num_runs,
+            skip_baseline=args.skip_baseline,
+            skip_train_collection=args.skip_train_collection,
         )
 
 
