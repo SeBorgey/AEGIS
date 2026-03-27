@@ -68,6 +68,16 @@ def get_completed_tasks(csv_path: str | Path) -> set[str]:
                     completed.add(row["task"])
     return completed
 
+def append_completed_task(csv_path: str | Path, task_name: str):
+    csv_path = Path(csv_path)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    file_exists = csv_path.exists()
+    with open(csv_path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["task"])
+        writer.writerow([task_name])
+
 def write_results(output_path: str | Path, task_results: list[tuple[str, list[RunMetrics]]]):
     if not task_results:
         return

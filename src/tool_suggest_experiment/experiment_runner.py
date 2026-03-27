@@ -15,12 +15,20 @@ from core.log_manager import LogManager
 from action_api import ActionPolicy, PolicyConfig, ActionExecutor, build_registry, build_manager_registry
 
 from tool_suggest_experiment.metrics import RunMetrics
-from tool_suggest_experiment.csv_writer import write_results, append_task_results, get_completed_tasks
+from tool_suggest_experiment.csv_writer import write_results, append_task_results, get_completed_tasks, append_completed_task
 from tool_suggest_experiment.config import (
     EASY_DATASET, MIDDLE_DATASET, HARD_DATASET,
     NUM_RUNS, NUM_JUDGE_RUNS, DEFAULT_TOP_K,
     FORMATTER_MAX_LEN, AUTOINTENT_PRESET,
 )
+
+from tool_suggest.client import ToolSuggestClient, ToolSuggestConfig, LocalBackendConfig
+from tool_suggest.services.formatter import SampleFormatter
+from tool_suggest.services.suggester.autointent import AutoIntentSuggester
+from tool_suggest.services.repository import JSONFileRepository
+from tool_suggest.services.selector import GreedySelector
+from tool_suggest.services.embedder import SentenceTransformerEmbedder
+from tool_suggest_experiment.dataset_collector import AegisDatasetCollector
 
 
 def load_tasks(dataset_paths: list[Path]) -> list[str]:
@@ -218,14 +226,6 @@ def run_full_experiment(
     skip_baseline: bool = False,
     skip_train_collection: bool = False,
 ):
-    from tool_suggest.client import ToolSuggestClient, ToolSuggestConfig, LocalBackendConfig
-    from tool_suggest.services.formatter import SampleFormatter
-    from tool_suggest.services.suggester.autointent import AutoIntentSuggester
-    from tool_suggest.services.repository import JSONFileRepository
-    from tool_suggest.services.selector import GreedySelector
-    from tool_suggest.services.embedder import SentenceTransformerEmbedder
-    from tool_suggest_experiment.dataset_collector import AegisDatasetCollector
-
     random.seed(42)
     tasks_copy = tasks.copy()
     random.shuffle(tasks_copy)
@@ -261,9 +261,16 @@ def run_full_experiment(
     collector_coder = AegisDatasetCollector(client_coder)
     collector_manager = AegisDatasetCollector(client_manager)
 
+    train_collection_csv = "train_collection_results.csv"
+    completed_train = get_completed_tasks(train_collection_csv)
+
     if not skip_train_collection:
         print(f"\n--- Phase 1: Baseline Dataset Collection (Train Tasks) ---")
         for task in train_tasks:
+            if task in completed_train:
+                print(f"\n  Task '{task}' already collected. Skipping.")
+                continue
+
             print(f"\nTask: {task} ({num_runs} runs)")
             for run_idx in range(num_runs):
                 print(f"  Train run {run_idx + 1}/{num_runs}...")
@@ -272,23 +279,35 @@ def run_full_experiment(
                     dataset_collector_coder=collector_coder,
                     dataset_collector_manager=collector_manager,
                 )
+            append_completed_task(train_collection_csv, task)
     else:
         print(f"\n--- Skipping Phase 1: Baseline Dataset Collection ---")
 
     print(f"\n--- Phase 2: Training tool-suggest ---")
-    try:
-        asyncio.run(client_coder.train())
-        print("    Coder tool-suggest trained.")
-    except Exception as e:
-        print(f"    Coder training failed: {e}")
-        client_coder = None
+    training_marker_coder = Path(f".trained_coder_{AUTOINTENT_PRESET}_{FORMATTER_MAX_LEN}.done")
+    training_marker_manager = Path(f".trained_manager_{AUTOINTENT_PRESET}_{FORMATTER_MAX_LEN}.done")
 
-    try:
-        asyncio.run(client_manager.train())
-        print("    Manager tool-suggest trained.")
-    except Exception as e:
-        print(f"    Manager training failed: {e}")
-        client_manager = None
+    if not training_marker_coder.exists():
+        try:
+            asyncio.run(client_coder.train())
+            training_marker_coder.touch()
+            print("    Coder tool-suggest trained.")
+        except Exception as e:
+            print(f"    Coder training failed: {e}")
+            client_coder = None
+    else:
+        print(f"    Coder tool-suggest already trained (found marker {training_marker_coder}). skipping.")
+
+    if not training_marker_manager.exists():
+        try:
+            asyncio.run(client_manager.train())
+            training_marker_manager.touch()
+            print("    Manager tool-suggest trained.")
+        except Exception as e:
+            print(f"    Manager training failed: {e}")
+            client_manager = None
+    else:
+        print(f"    Manager tool-suggest already trained (found marker {training_marker_manager}). skipping.")
 
     completed_baseline = get_completed_tasks(baseline_csv)
     completed_ts = get_completed_tasks(toolsuggest_csv)
