@@ -47,8 +47,8 @@ def get_suggested_tools_section(
 
     filtered = {k: v for k, v in all_tools.items() if k in suggested_names}
     if not filtered:
-        return _format_tools(all_tools)
-    return _format_tools(filtered)
+        return f"\n\n### Available Tools for this step:\n" + _format_tools(all_tools)
+    return f"\n\n### Available Tools for this step:\n" + _format_tools(filtered)
 
 
 def _format_tools(tools: dict[str, str]) -> str:

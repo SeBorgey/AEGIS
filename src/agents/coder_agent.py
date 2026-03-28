@@ -33,9 +33,12 @@ class ReActAgent:
         self.top_k = top_k
         self.step_count = 0
 
-    def _build_system_prompt(self, tools_section: str | None = None) -> str:
+    def _build_system_prompt(self, tools_section: str | None = None, dynamic_tools: bool = False) -> str:
         if tools_section is None:
-            tools_section = """- read_file: {"path": "file.py"}
+            if dynamic_tools:
+                tools_section = "Available actions are provided at the end of the context for each step."
+            else:
+                tools_section = """- read_file: {"path": "file.py"}
 - create_file: {"path": "file.py", "content": "code"}
 - edit_file: {"path": "file.py", "old": "old text", "new": "new text"}
 - get_file_tree: {"start_path": ".", "max_depth": 2} - show file structure
@@ -82,8 +85,11 @@ Important:
         self.log.start_chat(self.agent_name)
 
         if not self.messages:
-            tools_section = self._get_tools_section()
-            system_prompt = self._build_system_prompt(tools_section)
+            if self.tool_suggest_client:
+                system_prompt = self._build_system_prompt(dynamic_tools=True)
+            else:
+                system_prompt = self._build_system_prompt()
+            
             self.messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Task: {task}"},
@@ -98,12 +104,15 @@ Important:
             self.log.info(f"Iteration {iteration + 1}/{self.max_iterations}")
             self.step_count += 1
 
-            if self.tool_suggest_client and iteration > 0:
+            messages_to_send = self.messages
+            if self.tool_suggest_client:
                 tools_section = self._get_tools_section()
                 if tools_section:
-                    self.messages[0]["content"] = self._build_system_prompt(tools_section)
+                    self.log.append_chat("system", tools_section, self.agent_name)
+                    messages_to_send = [msg.copy() for msg in self.messages]
+                    messages_to_send[-1]["content"] += tools_section
 
-            response = self.llm.chat(self.messages, response_model=AgentResponse)
+            response = self.llm.chat(messages_to_send, response_model=AgentResponse)
             if not response:
                 self.log.error("Empty LLM response")
                 return False

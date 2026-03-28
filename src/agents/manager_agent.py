@@ -29,9 +29,12 @@ class ManagerAgent:
         self.top_k = top_k
         self.step_count = 0
 
-    def _build_system_prompt(self, tools_section: str | None = None) -> str:
+    def _build_system_prompt(self, tools_section: str | None = None, dynamic_tools: bool = False) -> str:
         if tools_section is None:
-            tools_section = """- run_coder: {"instruction": "text"} - Send instructions to the Coder Agent. First call should include the RPD. Subsequent calls should include feedback or new tasks.
+            if dynamic_tools:
+                tools_section = "Available tools are provided at the end of the context for each step."
+            else:
+                tools_section = """- run_coder: {"instruction": "text"} - Send instructions to the Coder Agent. First call should include the RPD. Subsequent calls should include feedback or new tasks.
 - finish_work: {} - Call this ONLY when the project is fully completed and verified. This will trigger the final build.
 - get_project_tree: {} - Get the file structure of the project.
 - get_all_symbols: {"file_path": "path/to/file.py"} - Get a list of classes and functions in a file with line numbers.
@@ -72,8 +75,11 @@ Important:
     def run(self, user_request: str) -> bool:
         self.log.start_chat(self.agent_name)
 
-        tools_section = self._get_tools_section()
-        system_prompt = self._build_system_prompt(tools_section)
+        if self.tool_suggest_client:
+            system_prompt = self._build_system_prompt(dynamic_tools=True)
+        else:
+            system_prompt = self._build_system_prompt()
+
         self.messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"User Request: {user_request}"},
@@ -88,12 +94,15 @@ Important:
             self.log.info(f"Manager Iteration {iteration + 1}/{self.max_iterations}")
             self.step_count += 1
 
-            if self.tool_suggest_client and iteration > 0:
+            messages_to_send = self.messages
+            if self.tool_suggest_client:
                 tools_section = self._get_tools_section()
                 if tools_section:
-                    self.messages[0]["content"] = self._build_system_prompt(tools_section)
+                    self.log.append_chat("system", tools_section, self.agent_name)
+                    messages_to_send = [msg.copy() for msg in self.messages]
+                    messages_to_send[-1]["content"] += tools_section
             
-            response = self.llm.chat(self.messages, response_model=AgentResponse)
+            response = self.llm.chat(messages_to_send, response_model=AgentResponse)
             if not response:
                 self.log.error("Empty LLM response for Manager")
                 return False
